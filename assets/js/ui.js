@@ -177,6 +177,32 @@
 
   /* ---------- כותרת ופוטר ---------- */
 
+  /* ---------- עדכונים חדשים ----------
+     עדכון "חדש" = מ־30 הימים האחרונים ועוד לא ראיתם אותו במכשיר הזה. מה שראיתם נשמר
+     במכשיר (rosh:updates-seen, רק מזהים — לא נתון אישי). ראיתם = לחצתם "הבנתי" או נכנסתם לדף העדכונים. */
+  const SEEN_KEY = 'rosh:updates-seen';
+  const NEW_DAYS = 30;
+  function seenUpdates() { try { const v = JSON.parse(localStorage.getItem(SEEN_KEY) || '[]'); return new Set(Array.isArray(v) ? v : []); } catch { return new Set(); } }
+  function recentUpdate(u) {
+    if (!u?.date) return false;
+    const S = window.RoshStore;
+    const today = S?.todayIL ? S.todayIL() : new Date().toISOString().slice(0, 10);
+    const d = (Date.parse(`${today}T00:00:00Z`) - Date.parse(`${u.date}T00:00:00Z`)) / 86400000;
+    return d >= 0 && d <= NEW_DAYS;
+  }
+  /** העדכונים החדשים (שעוד לא ראיתם), מהחדש לישן */
+  function newUpdates() {
+    const seen = seenUpdates();
+    return (window.RoshStore?.settings?.updates || []).filter((u) => recentUpdate(u) && !seen.has(u.id))
+      .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  }
+  function markUpdatesSeen(ids) {
+    const all = seenUpdates();
+    (ids || (window.RoshStore?.settings?.updates || []).map((u) => u.id)).forEach((id) => all.add(id));
+    try { localStorage.setItem(SEEN_KEY, JSON.stringify([...all].slice(-300))); } catch { /* */ }
+    repaintHeader();
+  }
+
   let headerActive = '';
   function header(active, site) {
     headerActive = active;
@@ -186,11 +212,13 @@
       ['index.html', 'בית', 'home'],
       ['archive.html', 'הארכיון', 'archive'],
       ['index.html#sets', 'סטים', 'sets'],
-      ...(S?.settings?.updates?.length ? [['updates.html', 'עדכונים', 'updates']] : []),
+      // "עדכונים" בתפריט רק כשיש עדכון מהחודש האחרון (או כשכבר נמצאים בדף), ועם נקודה כשיש חדש
+      ...((S?.settings?.updates || []).some(recentUpdate) || active === 'updates' ? [['updates.html', 'עדכונים', 'updates']] : []),
       ['index.html#follow', 'הקהילה', 'community'],
-    ].map(([href, label, key]) =>
-      `<a href="${href}" ${active === key ? 'aria-current="page"' : ''}>${label}</a>`
-    ).join('');
+    ].map(([href, label, key]) => {
+      const fresh = key === 'updates' && active !== 'updates' ? newUpdates().length : 0;
+      return `<a href="${href}" ${active === key ? 'aria-current="page"' : ''}${fresh ? ` class="has-new" aria-label="${label} — ${fresh === 1 ? 'עדכון חדש' : `${fresh} עדכונים חדשים`}"` : ''}>${label}${fresh ? `<i class="nav-new" aria-hidden="true">${fresh}</i>` : ''}</a>`;
+    }).join('');
     const first = user ? String(user.name || user.email || '').split(/[\s@]/)[0] : '';
     const me = user
       ? `<a href="me.html" class="me-link signed" ${active === 'me' ? 'aria-current="page"' : ''}>${user.picture ? `<img class="avatar" src="${esc(user.picture)}" alt="" referrerpolicy="no-referrer">` : `<span class="avatar" aria-hidden="true">${esc(first.slice(0, 1) || '☺')}</span>`}<span>${esc(first || 'האזור האישי')}</span></a>`
@@ -643,5 +671,5 @@
     mountSubscribe(host);
   });
 
-  window.RoshUI = { banner, messageForm, mountSubscribe, esc, fmtTime, parseTime, fmtDuration, fmtDate, fmtHebDate, fmtWeekday, slugify, qs, header, footer, repaintHeader, actionButtons, paintActions, push, notify, kbdHelp, isTyping, copy, driveId, isDriveUrl, streamUrl, streamCandidates, downloadUrl, shareUrl, publicLinks, coverVars, hue, seasonVars, epCard, reveal, pauseOffscreen, countUp, eqBars, reduceMotion, applyPrefs };
+  window.RoshUI = { newUpdates, markUpdatesSeen, banner, messageForm, mountSubscribe, esc, fmtTime, parseTime, fmtDuration, fmtDate, fmtHebDate, fmtWeekday, slugify, qs, header, footer, repaintHeader, actionButtons, paintActions, push, notify, kbdHelp, isTyping, copy, driveId, isDriveUrl, streamUrl, streamCandidates, downloadUrl, shareUrl, publicLinks, coverVars, hue, seasonVars, epCard, reveal, pauseOffscreen, countUp, eqBars, reduceMotion, applyPrefs };
 })();

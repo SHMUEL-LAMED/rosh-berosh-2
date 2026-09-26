@@ -164,7 +164,7 @@
     ${c.hostsNote ? `<p>${esc(c.hostsNote)}</p>` : ''}
     <div class="way-foot">${c.email ? `<a class="btn" href="${mail("צרף לצ'אט")}">בקשת הצטרפות לצ׳אט <span>←</span></a>` : ''}${c.chatNote ? `<small>${esc(c.chatNote)}</small>` : ''}</div>
   </article>` : '';
-    const form = U.messageForm({ title: '', hint: 'שאלה, תגובה, בקשה לשיר או רעיון לפרק — המגישים קוראים כל הודעה.' });
+    const form = U.messageForm({ title: '', hint: 'שאלה, תגובה או רעיון לפרק — המגישים קוראים כל הודעה.' });
     const write = form ? `
   <article class="way way-write" style="--way:56 225 255">${icon('write')}
     <p class="kicker">כתבו כאן</p><h3>ישר למגישים</h3>${form}

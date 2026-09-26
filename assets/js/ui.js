@@ -633,6 +633,29 @@
 
   /** מציג את מצב ההרשמה בתוך אלמנט: מחוברים → כפתור הצטרפות (והסרה — רק באזור האישי,
    *  data-subscribe-host="manage"); אחרת כפתור Google. */
+  /** חלון אישור לפני הסרה מהרשימה. מחזיר true רק כשלחצו "כן, להסיר". */
+  function confirmLeave(email) {
+    return new Promise((resolve) => {
+      document.getElementById('unsub-dlg')?.remove();
+      const d = document.createElement('dialog');
+      d.id = 'unsub-dlg';
+      d.className = 'sheet unsub-dlg';
+      d.setAttribute('aria-labelledby', 'unsub-title');
+      d.innerHTML = `
+<div class="section-title"><div><p class="kicker">רשימת התפוצה</p><h2 id="unsub-title">להסיר אתכם מהרשימה?</h2></div><button type="button" class="icon-btn" data-no aria-label="ביטול">✕</button></div>
+<div class="card-body">
+  <div class="unsub-warn" role="alert"><span aria-hidden="true">⚠</span><p>אחרי ההסרה <b>לא תקבלו יותר מייל</b> כשעולה תוכנית חדשה${email ? ` לכתובת <b dir="ltr">${esc(email)}</b>` : ''}. אפשר להצטרף שוב בכל רגע.</p></div>
+</div>
+<div class="card-foot"><button type="button" class="btn primary" data-no>ביטול — להישאר ברשימה</button><button type="button" class="btn danger" data-yes>כן, להסיר אותי</button></div>`;
+      document.body.appendChild(d);
+      const done = (v) => { d.close(); d.remove(); resolve(v); };
+      d.addEventListener('click', (ev) => { if (ev.target === d || ev.target.closest('[data-no]')) done(false); else if (ev.target.closest('[data-yes]')) done(true); });
+      d.addEventListener('cancel', (ev) => { ev.preventDefault(); done(false); });
+      d.showModal();
+      d.querySelector('.btn.primary[data-no]').focus();   // ברירת המחדל — להישאר
+    });
+  }
+
   async function mountSubscribe(el) {
     const S = window.RoshStore;
     if (!el || !S?.sb?.configured) return;
@@ -653,6 +676,12 @@
     // 401 = הטוקן של המכשיר הזה כבר לא תקף. מוחקים אותו כאן בלבד — לא S.signOut(), שמנתק את
     // החשבון מכל המכשירים ומאתר הסקר בגלל בדיקה שקטה ברקע
     catch (err) { if (err.status === 401) { S.forgetSession(); return mountSubscribe(el); } el.innerHTML = `<span class="cue-hint">${esc(err.message)}</span>`; return; }
+    // הרגע הוסרו: הודעה ברורה במקום, עם הצטרפות מחדש
+    if (!subscribed && el.dataset.justLeft) {
+      delete el.dataset.justLeft;
+      el.innerHTML = `<div class="subscribe-google unsub-done" role="status"><span class="unsub-done-mark" aria-hidden="true">✓</span><div><b>הוסרתם מרשימת התפוצה.</b><small>לא יישלחו יותר מיילים ל־<span dir="ltr">${esc(u.email)}</span>. התחרטתם?</small></div><button type="button" class="btn small" data-subscribe>הצטרפות מחדש</button></div>`;
+      return;
+    }
     el.innerHTML = subscribed
       ? `<div class="subscribe-google"><span class="subscribe-state">✓ אתם ברשימת התפוצה (${esc(u.email)})</span>${el.dataset.subscribeHost === 'manage' ? '<button type="button" class="btn ghost small" data-unsubscribe>הסרה מהרשימה</button>' : ''}</div>`
       : `<div class="subscribe-google"><button type="button" class="continue btn xl primary" data-subscribe>הצטרפות לתפוצה <span>←</span></button><span class="cue-hint" style="font-size:12px;color:var(--muted);font-weight:700">הכתובת: ${esc(u.email)}. הלחיצה היא ההסכמה — בלי דואר מיותר.</span></div>`;
@@ -665,7 +694,13 @@
     const host = (join || leave || fb).closest('[data-subscribe-host]');
     try {
       if (join) { join.disabled = true; await S.sb.subscribe.join(); notify('נרשמתם לרשימת התפוצה.', 'success'); }
-      else if (leave) { leave.disabled = true; await S.sb.subscribe.leave(); notify('הוסרתם מרשימת התפוצה.', 'success'); }
+      else if (leave) {
+        if (!await confirmLeave(S.sb.user?.email)) return;
+        leave.disabled = true;
+        await S.sb.subscribe.leave();
+        if (host) host.dataset.justLeft = '1';
+        notify('הוסרתם מרשימת התפוצה. לא יישלחו אליכם יותר מיילים.', 'success');
+      }
       else await S.sb.signIn();
     } catch (err) { notify(err.message, 'error'); }
     mountSubscribe(host);

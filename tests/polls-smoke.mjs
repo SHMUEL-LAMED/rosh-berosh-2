@@ -12,7 +12,7 @@ const fails = [];
 const check = (ok, msg) => { console.log(`${ok ? '✓' : '✕'} ${msg}`); if (!ok) fails.push(msg); };
 const catalog = JSON.parse(readFileSync(new URL('../data/episodes.json', import.meta.url), 'utf8'));
 let settings = { banner: { enabled: false, text: '' }, updates: [], polls: [] };
-let published = null; let publishBody = null; let draft = null; let pollsDown = false; const votes = {}; let uploads = 0;
+let subscribed = true; let published = null; let publishBody = null; let draft = null; let pollsDown = false; const votes = {}; let uploads = 0;
 const users = { admin: { sub: 'u-admin', email: 'admin@example.com', name: 'מנהל', isAdmin: true }, listener: { sub: 'u-1', email: 'l@example.com', name: 'מאזין', isAdmin: false } };
 const status = (p, user) => {
   const mine = votes[p.id]?.[user?.sub] || [];
@@ -54,7 +54,7 @@ await ctx.route(`${API}/**`, async (route) => {
   }
   if (p === '/api/program/userdata') return m === 'GET' ? json({ data: null, updatedAt: null }) : json({ ok: true, updatedAt: new Date().toISOString() });
   if (p === '/api/program/likes') return json({ counts: {}, mine: [] });
-  if (p === '/api/program/subscribe') return json({ subscribed: false });
+  if (p === '/api/program/subscribe') { if (m === 'DELETE') subscribed = false; if (m === 'POST') subscribed = true; return json({ subscribed, ok: true }); }
   return json({ error: 'לא נמצא' }, 404);
 });
 await ctx.route('https://accounts.google.com/**', (route) => route.abort());
@@ -155,6 +155,22 @@ check((await page.locator('#ep-polls [data-poll-change]').count()) === 1, 'אפ�
 await page.goto(`${BASE}/index.html`);
 await page.waitForSelector('#home-polls .poll');
 check((await page.locator('#home-polls .poll-opt.mine').count()) === 1, 'בדף הבית: אותו סקר, עם הבחירה שלי מסומנת');
+/* ---------- הסרה מרשימת התפוצה: אזהרה לפני, אישור אחרי ---------- */
+await page.goto(`${BASE}/me.html`);
+await page.waitForSelector('#me-subscribe [data-unsubscribe]');
+await page.click('#me-subscribe [data-unsubscribe]');
+await page.waitForSelector('#unsub-dlg[open]');
+check((await page.locator('#unsub-dlg .unsub-warn').innerText()).includes('לא תקבלו יותר מייל'), 'לפני ההסרה: חלון אזהרה');
+await page.click('#unsub-dlg .btn.primary[data-no]');
+await page.waitForTimeout(300);
+check(subscribed && (await page.locator('#me-subscribe [data-unsubscribe]').count()) === 1, '"ביטול" משאיר ברשימה');
+await page.click('#me-subscribe [data-unsubscribe]');
+await page.click('#unsub-dlg [data-yes]');
+await page.waitForSelector('#me-subscribe .unsub-done');
+check(!subscribed && (await page.locator('#me-subscribe .unsub-done').innerText()).includes('הוסרתם מרשימת התפוצה'), 'אחרי ההסרה: הודעה ברורה במקום');
+await page.click('#me-subscribe .unsub-done [data-subscribe]');
+await page.waitForSelector('#me-subscribe [data-unsubscribe]');
+check(subscribed, '"הצטרפות מחדש" מחזירה לרשימה');
 pollsDown = true;
 await page.goto(`${BASE}/index.html`);
 await page.waitForSelector('#featured .card');

@@ -1509,3 +1509,16 @@ dialog.sheet .card-body { padding: 18px 22px 22px; }
 .ltr-inline { direction: ltr; unicode-bidi: isolate; display: inline-block; }
 .muted-note { font-size: 14px; color: var(--muted) !important; }
 .statement-date { margin: 4px 4px 0; font-size: 14px; font-weight: 700; color: var(--muted); }
+
+/* הסרה מרשימת התפוצה: אזהרה לפני, ואישור אחרי */
+dialog.unsub-dlg { width: min(520px, 94vw); }
+.unsub-warn { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border: 1px solid var(--error-border); border-radius: 16px; background: var(--error-bg); }
+.unsub-warn span { font-size: 22px; line-height: 1.2; color: var(--error); }
+.unsub-warn p { margin: 0; line-height: 1.7; color: var(--text); }
+.unsub-dlg .card-foot { justify-content: space-between; flex-wrap: wrap; }
+.unsub-done { grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 6px 12px; padding: 14px 16px; border: 1px solid var(--success-border); border-radius: 16px; background: var(--success-bg); }
+.unsub-done-mark { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--success); color: #06231a; font-weight: 900; }
+.unsub-done b { display: block; color: var(--text-strong); }
+.unsub-done small { color: var(--text-2); }
+.unsub-done .btn { grid-column: 1 / -1; justify-self: start; }
+.unsub-dlg .section-title { flex-wrap: nowrap; } .unsub-dlg .section-title h2 { font-size: 32px; }

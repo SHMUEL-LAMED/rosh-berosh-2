@@ -183,7 +183,7 @@
     const name = ctx.siteName || 'ראש בראש';
     const base = {
       kind: own(KINDS, kind) ? kind : 'episode',
-      style: 'night', accent: '', cover: 'side', font: 'modern', shape: 'pill', image: '',
+      style: 'night', accent: '', cover: 'head', font: 'modern', shape: 'pill', image: '',
       listenLabel: 'להאזנה באתר', downloadLabel: 'הורדת התוכנית', siteLabel: kind === 'digest' ? 'לכל התוכניות באתר' : 'לאתר התוכנית',
       // התיאור במייל: מתחיל מהתיאור של התוכנית באתר, ואפשר לערוך אותו למייל בלבד
       description: String(episode?.description || ''), descTitle: 'על התוכנית',
@@ -231,10 +231,11 @@
     const dates = items.map((i) => i.dateText).filter(Boolean);
     const meta = kind === 'episode' ? [ctx.dateText, ctx.durationText, o.show.guests && guests.length ? `עם ${guests.join(', ')}` : ''].filter(Boolean)
       : kind === 'digest' ? (dates.length > 1 && dates[0] !== dates.at(-1) ? [`${dates.at(-1)} – ${dates[0]}`] : dates.slice(0, 1)) : [ctx.dateText].filter(Boolean);
-    // תמונה: קישור משלכם, או התמונה של התוכנית (ליד הכותרת מספיקה הקטנה; גדולה למעלה — המלאה)
+    // תמונה: קישור משלכם, או התמונה של התוכנית — בכותרת (מעל השם) או גדולה לכל הרוחב.
+    // "side" (ליד הכותרת) מגרסה קודמת — מוצג עכשיו בכותרת.
     const custom = /^https:\/\/\S+$/i.test(String(o.image || '').trim()) ? String(o.image).trim() : '';
-    const cover = custom || (kind === 'episode' ? String((o.cover === 'full' ? e.cover || e.thumb : e.thumb || e.cover) || '') : '');
-    const coverMode = cover && o.cover !== 'none' ? (o.cover === 'full' ? 'full' : 'side') : 'none';
+    const cover = custom || (kind === 'episode' ? String(e.cover || e.thumb || '') : '');
+    const coverMode = cover && o.cover !== 'none' ? (o.cover === 'full' ? 'full' : 'head') : 'none';
 
     const td = (inner, style = '', attrs = '') => `<td dir="rtl" align="right" style="${style}" ${attrs}>${inner}</td>`;
     const row = (inner, pad = '18px 32px 0') => `<tr>${td(inner, `padding:${pad}`, 'class="p"')}</tr>`;
@@ -342,11 +343,9 @@ ${td(`${m ? `<p style="margin:0 0 4px;font-family:${F.sans};font-size:12.5px;fon
 <p style="margin:0 0 10px;font-family:${F.sans};font-size:13px;font-weight:900;letter-spacing:.02em;color:${p.accent}">✦ ${esc(kicker)}</p>
 <h1 class="h1" style="margin:0;font-family:${F.display};font-size:${F.size}px;font-weight:${F.weight};line-height:${F.lh};color:${p.text}">${esc(headline)}</h1>
 ${meta.length ? `<p style="margin:10px 0 0;font-family:${F.sans};font-size:14px;font-weight:700;line-height:1.6;color:${p.muted}">${esc(meta.join(' · '))}</p>` : ''}`;
-    const header = coverMode === 'side'
-      ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" dir="rtl"><tr>
-${td(`<img src="${esc(cover)}" width="160" height="160" alt="" style="display:block;width:160px;height:160px;border-radius:18px;object-fit:cover;border:1px solid ${p.border}">`, 'width:160px;padding:0 0 0 22px;vertical-align:top', 'class="cv"')}
-${td(titleBlock, 'vertical-align:top', 'class="tb"')}
-</tr></table>`
+    // בכותרת: התמונה ברוחב הכרטיס, מעל הכותרת
+    const header = coverMode === 'head'
+      ? `<img src="${esc(cover)}" width="536" alt="" class="hc" style="display:block;width:100%;max-width:536px;height:auto;margin:0 0 22px;border-radius:20px;border:1px solid ${p.border}">${titleBlock}`
       : titleBlock;
     const fullCover = coverMode === 'full' ? `<tr>${td(`<img src="${esc(cover)}" width="600" alt="" class="w" style="display:block;width:100%;max-width:600px;height:auto;border:0">`, 'padding:0')}</tr>` : '';
     const fontCss = fontsUrl(o.font);
@@ -391,8 +390,7 @@ a { color: inherit; }
   .w { width: 100% !important; }
   .p { padding-left: 20px !important; padding-right: 20px !important; }
   .h1 { font-size: ${Math.round(F.size * 0.78)}px !important; }
-  .cv { display: block !important; width: 100% !important; padding: 0 0 16px !important; }
-  .tb { display: block !important; width: 100% !important; }
+  .hc { max-width: 100% !important; }
   .bts { width: 100% !important; }
   .bt { display: block !important; width: 100% !important; padding: 0 0 10px !important; }
   .bt a { display: block !important; }

@@ -40,7 +40,64 @@
     popup_failed_to_open: 'הדפדפן חסם את החלון של Google. אפשרו חלונות קופצים לאתר הזה ונסו שוב.',
     popup_closed: 'החלון של Google נסגר לפני שאישרתם. לחצו שוב כדי לנסות.',
   };
-  const authError = (type) => new Error(AUTH_ERRORS[type] || `Google לא אישר את הגישה לג'ימייל${type ? ` (${type})` : ''}. נסו שוב.`);
+  const authError = (type) => {
+    // "לא אישרתם" או "החלון נסגר" — כנראה לא היה ברור מה ללחוץ במסך של Google: בפעם הבאה ההסבר מופיע שוב
+    if (type === 'access_denied' || type === 'popup_closed') introSeen(false);
+    return Object.assign(new Error(AUTH_ERRORS[type] || `Google לא אישר את הגישה לג'ימייל${type ? ` (${type})` : ''}. נסו שוב.`), { code: type });
+  };
+
+  /* ---------- הסבר חד־פעמי לפני החיבור הראשון ----------
+     האפליקציה של Google לא מאומתת, ולכן בפעם הראשונה Google מציג מסך אזהרה. לפני שהוא נפתח
+     מסבירים מה ללחוץ. "ראיתם" נשמר בחשבון (כמו mailDraft) ובגיבוי במכשיר. */
+  const INTRO = 'mailAuthIntroSeen';
+  function introSeen(set) {
+    if (set === undefined) {
+      if (S.prefs.get(INTRO, false) === true) return true;
+      try { return localStorage.getItem(`rosh:${INTRO}`) === '1'; } catch { return false; }
+    }
+    S.prefs.set(INTRO, !!set);
+    try { if (set) localStorage.setItem(`rosh:${INTRO}`, '1'); else localStorage.removeItem(`rosh:${INTRO}`); } catch { /* */ }
+    return !!set;
+  }
+  /** צריך להסביר לפני שחלון Google נפתח: אין טוקן תקף, וההסבר עוד לא נראה (או שהחיבור הקודם נכשל) */
+  const needsIntro = () => !hasToken() && !introSeen();
+  /** חלון ההסבר. onContinue נקרא ישירות מתוך הלחיצה על "הבנתי" — כך getToken() שבתוכו
+      פותח את חלון Google בלי שהדפדפן יחסום אותו. */
+  function authIntro(onContinue) {
+    prepare();   // הספרייה של Google נטענת כבר עכשיו, כדי שהלחיצה על "המשך" תפתח את החלון מיד
+    document.getElementById('dlg-gmail-intro')?.remove();
+    const d = document.createElement('dialog');
+    d.id = 'dlg-gmail-intro';
+    d.className = 'sheet gmail-intro';
+    d.setAttribute('aria-labelledby', 'gmail-intro-title');
+    d.innerHTML = `
+<div class="section-title"><div><p class="kicker">ג'ימייל</p><h2 id="gmail-intro-title">חיבור חד־פעמי ל־Gmail</h2></div><button type="button" class="icon-btn" data-gi="cancel" aria-label="ביטול">✕</button></div>
+<div class="card-body">
+  <p>כדי שהאתר יוכל ליצור טיוטות בתיבת ה־Gmail שלך, צריך לאשר פעם אחת את החיבור.</p>
+  <p class="gi-warn"><span aria-hidden="true">⚠</span>ייפתח חלון של Google עם אזהרה שהאפליקציה לא מאומתת — זה תקין, זו האפליקציה של האתר.</p>
+  <ol class="gi-steps">
+    <li>לחצו <b>'מתקדם'</b> <span dir="ltr">(Advanced)</span></li>
+    <li>לחצו <b>'מעבר אל … (לא בטוח)'</b></li>
+    <li>סמנו את התיבה <b>'ניהול טיוטות ושליחת אימיילים'</b></li>
+    <li>לחצו <b>'המשך'</b></li>
+  </ol>
+  <p class="gi-note">האתר לא קורא את המיילים שלכם — הוא רק יוצר טיוטות. אחרי האישור לא תצטרכו לעשות זאת שוב.</p>
+</div>
+<div class="card-foot"><button type="button" class="btn" data-gi="cancel">ביטול</button><button type="button" class="btn primary" data-gi="go">הבנתי, המשך לאישור <span>←</span></button></div>`;
+    document.body.appendChild(d);
+    const close = () => { d.close(); d.remove(); };
+    d.addEventListener('click', (ev) => {
+      if (ev.target === d || ev.target.closest('[data-gi="cancel"]')) { close(); return; }
+      if (ev.target.closest('[data-gi="go"]')) {
+        introSeen(true);
+        close();
+        onContinue();   // בלי await לפני — getToken() חייב לרוץ בתוך הלחיצה
+      }
+    });
+    d.addEventListener('cancel', (ev) => { ev.preventDefault(); close(); });
+    d.showModal();
+    d.querySelector('[data-gi="go"]').focus();
+  }
   /** טוען מראש את הספרייה של Google, כדי שהלחיצה על "יצירה" תפתח את חלון האישור מיד (דפדפנים חוסמים חלון שנפתח באיחור) */
   function prepare() {
     if (auth.client) return Promise.resolve();
@@ -294,6 +351,7 @@
 
   <div class="mc-foot">
     <button type="button" class="btn xl primary" data-mop="create" title="Ctrl+Enter">יצירת טיוטה בג'ימייל <span>←</span></button>
+    <button type="button" class="mc-auth-help" data-mop="auth-help">איך מחברים את Gmail?</button>
     <button type="button" class="btn" data-mop="replace" hidden>החלפת הטיוטה הקודמת</button>
     <button type="button" class="btn" data-mop="test" title="מייל אמיתי לתיבה שלכם בלבד — לראות אותו כמו שהמאזינים יראו">שליחת בדיקה אליי</button>
     <button type="button" class="btn" data-mop="copy">העתקת המייל</button>
@@ -699,6 +757,7 @@
     }
     async function create({ replace = false, force = false } = {}) {
       if (st.busy) return;
+      if (needsIntro()) { authIntro(() => create({ replace, force })); return; }
       const b = built(); if (!b) return;
       const key = keyFor(), list = st.mode === 'me' ? [] : effective();
       if (st.mode === 'all' && !list.length) { st.error = 'אין כתובות ברשימה — ייבאו קובץ או הדביקו כתובות, או בחרו "רק אליי".'; st.errorForce = false; paintResult(); return; }
@@ -747,6 +806,7 @@
     /** מייל אמיתי — רק לתיבה של החשבון המחובר, כדי לראות אותו בדיוק כמו שהמאזינים יראו */
     async function sendTest() {
       if (st.busy) return;
+      if (needsIntro()) { authIntro(sendTest); return; }
       const b = built(); if (!b) return;
       const tokenP = getToken();
       st.busy = true; st.error = ''; st.errorForce = false; st.progress = 'שולחים מייל בדיקה אליכם…'; paintResult();
@@ -1020,6 +1080,10 @@
         case 'create-anyway': create({ force: true, replace: st.errorReplace }); break;
         case 'replace': create({ replace: true }); break;
         case 'test': sendTest(); break;
+        case 'auth-help': authIntro(() => {
+          if (hasToken()) { U.notify('Gmail כבר מחובר.', 'success'); return; }
+          getToken().then(() => U.notify('Gmail מחובר — אפשר ליצור טיוטות.', 'success')).catch((err) => U.notify(err.message, 'error'));
+        }); break;
         case 'copy': copyMail(); break;
         case 'copy-html': { closeMenus(); const x = built(); if (x) (await U.copy(x.html)) ? U.notify('קוד ה־HTML הועתק — אפשר להדביק אותו בכל תוכנת דיוור.', 'success') : U.notify('ההעתקה לא הצליחה.', 'error'); break; }
         case 'copy-text': { closeMenus(); const x = built(); if (x) (await U.copy(x.text)) ? U.notify('גרסת הטקסט הועתקה.', 'success') : U.notify('ההעתקה לא הצליחה.', 'error'); break; }

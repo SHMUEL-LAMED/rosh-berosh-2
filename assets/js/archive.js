@@ -175,6 +175,7 @@ ${guests.length ? `<label class="visually-hidden" for="guest">אורח</label>
 
   renderFilters();
   render();
+  window.RoshPolls?.mount(document.getElementById('archive-polls'), window.RoshPolls.forPlace('archive'));
 
   // "לאחר כך" מהחשבון הגיע אחרי שהדף צויר (ready לא מחכה לו יותר מ־2.5 שניות), או השתנה:
   // כשהסינון "לאחר כך" פעיל — התוצאות והספירה מתעדכנות

@@ -121,6 +121,7 @@
   <div class="now-playing-strip ep-now" id="now-strip" hidden></div>
 </header>
 ${survey ? `<div class="site-banner ep-survey${survey.open ? ' vote' : ''}"><span class="site-banner-mark" aria-hidden="true">${survey.open ? '✓' : '✦'}</span><p>${survey.open ? `המצעד של התוכנית הזו פתוח להצבעה${survey.name ? ` — <b>${esc(survey.name)}</b>` : ''}` : `התוכנית הזו מקושרת למצעד${survey.name ? ` "${esc(survey.name)}"` : ''} — ההצבעה הסתיימה`}</p>${survey.open ? `<a class="btn small primary" href="${esc(survey.url)}" target="_blank" rel="noopener">הצביעו עכשיו <span>←</span></a>` : ''}</div>` : ''}
+<section class="polls-zone ep-polls" id="ep-polls" aria-label="סקר" hidden></section>
 <div class="ep-body">
   <section class="card card-body ep-section ep-about" aria-labelledby="ep-about-title">
     <div class="ep-about-main">
@@ -164,6 +165,9 @@ ${nb.newer ? `<a href="episode.html?ep=${encodeURIComponent(nb.newer.slug)}" cla
     M.setAttribute('data-reveal', '');
     M.innerHTML = `<div class="grid-head"><div><p class="kicker">${season ? esc(season.title) : 'עוד'}</p><h2>עוד מאותה תקופה</h2></div><a href="archive.html${ep.season ? `?season=${encodeURIComponent(ep.season)}` : ''}">לכל התוכניות ←</a></div><div class="ep-grid">${more.map((e) => U.epCard(e)).join('')}</div>`;
   }
+  // סקר של התוכנית: בולט, מיד אחרי הפתיחה. בלי סקר — לא מוצג כלום.
+  window.RoshPolls?.mount(document.getElementById('ep-polls'), window.RoshPolls.forPlace('episode', ep), { featured: true });
+
   U.reveal();
 
   /* ---------- תגובות המאזינים ----------

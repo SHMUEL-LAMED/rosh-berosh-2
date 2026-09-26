@@ -193,6 +193,7 @@
 </div>`;
   U.mountSubscribe(Fo.querySelector('[data-subscribe-host]'));
 
+  window.RoshPolls?.mount(document.getElementById('home-polls'), window.RoshPolls.forPlace('home'));
   U.reveal();
 
   // מספרים רצים כשהלוח נכנס למסך

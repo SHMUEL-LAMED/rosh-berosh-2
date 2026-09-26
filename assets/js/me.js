@@ -159,6 +159,8 @@ ${heard.length > 30 ? `<p class="cue-hint">ועוד ${heard.length - 30} תוכ�
   renderProfile(!!S.sb.user);
   renderLists();
   renderSubscription();
+  // הסקר מתעדכן לבד בכניסה וביציאה (polls.js) — לא צריך לצייר אותו מחדש עם השאר
+  window.RoshPolls?.mount($('me-polls'), window.RoshPolls.forPlace('me'));
   if (S.sb.user) { await S.state.verified; if (on.signal?.aborted) return; renderProfile(false); }
   // כניסה, יציאה, או נתונים שהגיעו מהחשבון — הכול מצויר מחדש
   const offSession = S.onSession(renderAll);

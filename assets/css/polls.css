@@ -1,0 +1,139 @@
+/* סקרים (polls.js): שלוש פריסות — רשימה, רשת, כרטיסים; תמונות לאפשרויות בעיגול, בריבוע
+   או בריבוע מעוגל, בשלושה גדלים; צבע לכל סקר (--poll-h); פסי תוצאות מונפשים. */
+
+.polls-zone { display: grid; gap: 18px; margin: 28px 0; }
+.polls-zone[hidden] { display: none; }
+.poll-slot[hidden] { display: none; }
+
+.poll {
+  --pa: hsl(var(--poll-h, 42) 85% 58%);
+  --pa-ink: hsl(var(--poll-h, 42) 90% var(--hue-l));
+  --pa-soft: hsl(var(--poll-h, 42) 85% 58% / .14);
+  --pa-line: hsl(var(--poll-h, 42) 85% 58% / .45);
+  --pi: 64px;
+  position: relative; overflow: hidden; container-type: inline-size;
+  border: 1px solid var(--border); border-radius: 28px;
+  background: radial-gradient(120% 90% at 100% 0%, var(--pa-soft), transparent 60%), var(--card-bg);
+  box-shadow: 0 18px 50px var(--sh-1);
+}
+.poll-featured { border-color: var(--pa-line); box-shadow: 0 24px 70px var(--sh-1), 0 0 0 1px var(--pa-soft) inset; }
+.poll-featured::before { content: ""; position: absolute; inset-inline: 0; top: 0; height: 4px; background: linear-gradient(90deg, var(--pa), transparent); }
+
+.poll-banner { aspect-ratio: 16 / 6; max-height: 260px; width: 100%; overflow: hidden; background: var(--pa-soft); }
+.poll-banner img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.poll-head { display: flex; gap: 18px; align-items: center; padding: clamp(20px, 3vw, 30px) clamp(18px, 3vw, 30px) 14px; }
+.poll-thumb { flex: none; width: 92px; height: 92px; overflow: hidden; border-radius: 22px; border: 2px solid var(--pa-line); background: var(--pa-soft); }
+.poll-thumb.circle { border-radius: 50%; }
+.poll-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.poll-headtext { min-width: 0; }
+.poll-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.poll-kicker { font-size: 12px; font-weight: 800; letter-spacing: .12em; color: var(--pa-ink); }
+.poll-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 99px; font-size: 11.5px; font-weight: 800; color: var(--muted); background: rgb(var(--fg-rgb) / .06); border: 1px solid var(--border); }
+.poll-chip.live { color: var(--success); border-color: var(--success-border); background: var(--success-bg); }
+.poll-chip.live i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 0 currentColor; animation: poll-pulse 1.8s ease-out infinite; }
+.poll-chip.closed { color: var(--muted); }
+@keyframes poll-pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 60%, transparent); } 100% { box-shadow: 0 0 0 8px transparent; } }
+.poll-q { margin: 6px 0 0; font-family: var(--display); font-weight: 700; font-size: clamp(30px, 7cqi, 48px); line-height: 1; color: var(--text-strong); }
+.poll-featured .poll-q { font-size: clamp(34px, 8cqi, 58px); }
+.poll-desc { margin: 10px 0 0; color: var(--text-2); line-height: 1.7; max-width: 720px; }
+
+/* ---------- האפשרויות ---------- */
+.poll-options { display: grid; gap: 10px; padding: 6px clamp(18px, 3vw, 30px) 4px; }
+.poll-opt {
+  position: relative; isolation: isolate; overflow: hidden;
+  display: flex; align-items: center; gap: 14px; width: 100%; min-height: 56px; padding: 10px 16px;
+  border: 1px solid var(--border); border-radius: 18px; background: rgb(var(--fg-rgb) / .035);
+  color: var(--text); font: inherit; text-align: start; cursor: pointer;
+  transition: transform .25s var(--ease), border-color .25s, background .25s, box-shadow .25s;
+}
+.poll-opt:hover:not([aria-disabled]) { transform: translateY(-2px); border-color: var(--pa-line); background: rgb(var(--fg-rgb) / .06); }
+.poll-opt:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.poll-opt[aria-disabled] { cursor: default; }
+.poll-opt.on { border-color: var(--pa); background: var(--pa-soft); box-shadow: 0 0 0 1px var(--pa) inset, 0 10px 26px var(--pa-soft); }
+.poll-txt { position: relative; z-index: 1; display: grid; gap: 2px; min-width: 0; flex: 1; }
+.poll-txt b { font-weight: 800; font-size: 16px; color: var(--text-strong); overflow-wrap: anywhere; }
+.poll-txt small { color: var(--muted); font-size: 13px; font-weight: 700; }
+.poll-img { position: relative; z-index: 1; flex: none; width: var(--pi); height: var(--pi); overflow: hidden; border-radius: 14px; background: var(--pa-soft); border: 1px solid var(--pa-line); display: grid; place-items: center; }
+.poll-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.poll-img.empty { font-family: var(--display); font-weight: 700; font-size: calc(var(--pi) * .5); color: var(--pa-ink); }
+.shape-circle .poll-img { border-radius: 50%; }
+.shape-square .poll-img { border-radius: 6px; }
+.shape-rounded .poll-img { border-radius: 22%; }
+.size-s { --pi: 44px; }
+.size-m { --pi: 64px; }
+.size-l { --pi: 96px; }
+
+/* סימון הבחירה: עיגול (בחירה אחת) או ריבוע (כמה) */
+.poll-mark { position: relative; z-index: 1; flex: none; width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--border-strong); display: grid; place-items: center; transition: background .2s, border-color .2s; }
+.poll-opt[aria-pressed] .poll-mark { border-radius: 8px; }
+.poll-opt.on .poll-mark, .poll-opt.mine .poll-mark { border-color: var(--pa); background: var(--pa); }
+.poll-opt.on .poll-mark::after, .poll-opt.mine .poll-mark::after { content: "✓"; color: #15110a; font-size: 14px; font-weight: 900; }
+
+/* ---------- תוצאות ---------- */
+.poll-bar { position: absolute; inset-block: 0; inset-inline-start: 0; z-index: 0; width: var(--pct); background: linear-gradient(90deg, var(--pa-soft), hsl(var(--poll-h, 42) 85% 58% / .26)); transition: width .9s var(--ease); }
+.poll-pct { position: relative; z-index: 1; flex: none; min-width: 3.2em; text-align: end; font-weight: 900; font-size: 15px; font-variant-numeric: tabular-nums; color: var(--text-2); }
+.poll-opt.win .poll-pct { color: var(--pa-ink); }
+.poll-opt.win { border-color: var(--pa-line); }
+.show-res .poll-opt:not(.on):not(.mine) .poll-mark { opacity: .35; }
+.just-voted .poll-bar { animation: poll-grow 1s var(--ease) both; animation-delay: calc(var(--i, 0) * 70ms); }
+@keyframes poll-grow { from { width: 0; } }
+
+/* ---------- רשת ---------- */
+.poll-grid { --pi: 120px; }
+.poll-grid.size-s { --pi: 84px; }
+.poll-grid.size-l { --pi: 170px; }
+.poll-grid .poll-options { grid-template-columns: repeat(auto-fill, minmax(calc(var(--pi) + 36px), 1fr)); gap: 12px; }
+.poll-grid .poll-img { width: min(var(--pi), 100%); height: auto; aspect-ratio: 1; }
+.poll-grid .poll-opt { flex-direction: column; justify-content: flex-start; gap: 10px; padding: 16px 12px 14px; text-align: center; }
+.poll-grid .poll-txt { justify-items: center; }
+.poll-grid .poll-mark { position: absolute; top: 10px; inset-inline-end: 10px; background: var(--glass); }
+.poll-grid .poll-bar, .poll-cards .poll-bar { inset-block: auto 0; height: 6px; border-radius: 0 6px 6px 0; background: var(--pa); }
+.poll-grid .poll-pct { min-width: 0; text-align: center; }
+
+/* ---------- כרטיסים גדולים ---------- */
+.poll-cards .poll-options { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px; }
+.poll-cards.size-s .poll-options { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+.poll-cards.size-l .poll-options { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+.poll-cards .poll-opt { flex-direction: column; align-items: stretch; gap: 0; padding: 0; border-radius: 22px; }
+.poll-cards .poll-img { width: 100%; height: auto; aspect-ratio: 1; border: 0; border-bottom: 1px solid var(--border); }
+.poll-cards.shape-circle .poll-img { width: calc(100% - 40px); margin: 20px auto 0; border: 3px solid var(--pa-line); }
+.poll-cards.shape-rounded .poll-img { border-radius: 22px 22px 0 0; }
+.poll-cards.shape-square .poll-img { border-radius: 0; }
+.poll-cards .poll-img.empty { font-size: 72px; }
+.poll-cards .poll-txt { padding: 14px 16px 16px; }
+.poll-cards .poll-txt b { font-size: 18px; }
+.poll-cards .poll-mark { position: absolute; top: 12px; inset-inline-end: 12px; width: 32px; height: 32px; background: var(--glass); border-color: rgba(255, 255, 255, .7); }
+.poll-cards .poll-pct { position: absolute; bottom: 14px; inset-inline-end: 14px; min-width: 0; font-size: 18px; }
+
+/* ---------- תחתית ---------- */
+.poll-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; padding: 16px clamp(18px, 3vw, 30px) clamp(18px, 3vw, 26px); }
+.poll-actions { display: flex; gap: 8px; margin-inline-start: auto; }
+.poll-hint { color: var(--muted); font-size: 13px; font-weight: 700; }
+.poll-done { color: var(--success); font-weight: 800; }
+.poll-total { color: var(--muted); font-size: 13px; font-weight: 800; }
+.poll-login { margin: 0 clamp(18px, 3vw, 30px) clamp(18px, 3vw, 26px); padding: 16px; border: 1px dashed var(--pa-line); border-radius: 18px; display: grid; gap: 10px; justify-items: start; background: var(--pa-soft); }
+.poll-login p { margin: 0; color: var(--text-2); }
+.poll-error { margin: 0 clamp(18px, 3vw, 30px) 18px; color: var(--error); font-weight: 700; }
+
+@media (max-width: 760px) { .poll { border-radius: 22px; } }
+/* לפי הרוחב של הסקר עצמו (גם בתצוגה המקדימה בגודל טלפון בניהול) */
+@container (max-width: 600px) {
+  .poll-head { gap: 12px; }
+  .poll-thumb { width: 64px; height: 64px; }
+  .size-l .poll-options { --pi: 76px; }
+  .poll-grid .poll-options { --pi: 90px; }
+  .poll-grid.size-s .poll-options { --pi: 64px; }
+  .poll-grid.size-l .poll-options { --pi: 120px; }
+  .poll-grid .poll-options { grid-template-columns: repeat(auto-fill, minmax(min(calc(var(--pi) + 24px), calc(50% - 6px)), 1fr)); }
+  .poll-banner { aspect-ratio: 16 / 7; }
+  .poll-cards .poll-options, .poll-cards.size-l .poll-options { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .poll-cards.size-s .poll-options { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+  .poll-cards .poll-txt b { font-size: 15px; }
+  .poll-actions { width: 100%; }
+  .poll-actions .btn.primary { flex: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .poll-opt, .poll-bar { transition: none; }
+  .just-voted .poll-bar, .poll-chip.live i { animation: none; }
+}

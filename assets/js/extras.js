@@ -81,7 +81,8 @@
     const key = `rosh:holiday-rain:${h.key}`;
     if (ss(key)) return; ss(key, '1');
     const layer = document.createElement('div'); layer.className = 'holiday-rain'; layer.setAttribute('aria-hidden', 'true');
-    for (let i = 0; i < 18; i++) {
+    const n = matchMedia('(max-width: 760px)').matches ? 10 : 18;   // בטלפון פחות קישוטים
+    for (let i = 0; i < n; i++) {
       const s = document.createElement('i');
       s.textContent = h.rain[i % h.rain.length];
       s.style.cssText = `--x:${Math.round(Math.random() * 100)}vw;--d:${(Math.random() * 1.8).toFixed(2)}s;--t:${(4 + Math.random() * 2.5).toFixed(2)}s;--r:${Math.round(Math.random() * 360)}deg;--s:${(.8 + Math.random() * .8).toFixed(2)}`;

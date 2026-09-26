@@ -100,7 +100,7 @@
   const longDesc = ep.description.length > 420;
   A.style.cssText = U.coverVars(ep);
   A.innerHTML = `
-<header class="ep-hero ep-album">
+<header class="ep-hero ep-album" data-anim-zone>
   <div class="ep-art" aria-hidden="true">
     <div class="ep-disc"><div class="vinyl" data-num="" style="--label:${U.hue(ep)}" data-vinyl="${esc(ep.id)}"><i></i></div></div>
     <div class="ep-sleeve${ep.cover ? ' has-cover' : ''}">${ep.cover ? `<img class="ep-sleeve-fill" src="${esc(ep.cover)}" alt=""><img src="${esc(ep.cover)}" alt="">` : sleeveNumber}</div>
@@ -108,7 +108,7 @@
   <div class="ep-head">
     <p class="kicker">${kicker}</p>
     <h1${ep.title.length > 22 ? ' class="ep-title-long"' : ''}>${esc(ep.title)}</h1>
-    ${facts.length || ep.guests.length ? `<p class="ep-facts">${facts.join('<i aria-hidden="true">·</i>')}${ep.guests.length ? `${facts.length ? '<i aria-hidden="true">·</i>' : ''}<span>עם ${esc(ep.guests.join(', '))}</span>` : ''}</p>` : ''}
+    ${facts.length || ep.guests.length ? `<p class="ep-facts">${facts.join('<i aria-hidden="true">·</i>')}${ep.guests.length ? `${facts.length ? '<i aria-hidden="true">·</i>' : ''}<span>עם ${ep.guests.map((g) => `<a class="guest-link" href="archive.html?guest=${encodeURIComponent(g)}" title="כל התוכניות עם ${esc(g)}">${esc(g)}</a>`).join(', ')}</span>` : ''}</p>` : ''}
   </div>
   <div class="ep-actionbar">
     ${stream ? `<button type="button" class="ep-play" data-play><span class="ep-play-disc" aria-hidden="true"><i></i></span><span class="ep-play-label">האזנה לתוכנית</span></button>` : '<span class="pill">אין עדיין הקלטה לתוכנית הזו</span>'}
@@ -247,14 +247,58 @@ ${comments.length ? `<ul class="comment-list">${comments.map((c) => commentHtml(
   A.addEventListener('click', async (e) => {
     if (e.target.closest('[data-play]')) { Pl.isCurrent(ep.id) ? Pl.toggle() : Pl.load(ep); return; }
     if (e.target.closest('[data-desc-toggle]')) { foldDesc(D.classList.contains('is-collapsed')); return; }
-    if (e.target.closest('[data-share]')) {
-      const url = U.shareUrl(ep);
-      if (navigator.share) { try { await navigator.share({ title: ep.title, text: ep.description.slice(0, 120), url }); return; } catch { /* בוטל */ } }
-      (await U.copy(url)) ? U.notify('הקישור לתוכנית הועתק.', 'success') : U.notify('ההעתקה נכשלה. הכתובת: ' + url, 'error');
-      return;
-    }
+    if (e.target.closest('[data-share]')) { shareDialog(); return; }
   });
   S.likes.load().then(() => { if (!on.signal?.aborted) U.paintActions(ep.id); });
+
+  /** חלון שיתוף: מההתחלה או מדקה מסוימת (ברירת המחדל — איפה שעומדים עכשיו בתוכנית הזו) */
+  function shareDialog() {
+    document.getElementById('share-dlg')?.remove();
+    const here = Pl.isCurrent(ep.id) && Pl.time > 5 ? Math.floor(Pl.time) : 0;
+    const d = document.createElement('dialog');
+    d.id = 'share-dlg';
+    d.className = 'sheet share-dlg';
+    d.innerHTML = `
+<div class="section-title"><div><p class="kicker">שיתוף</p><h2>שלחו לחבר</h2></div><button type="button" class="icon-btn" data-close aria-label="סגירה">✕</button></div>
+<div class="card-body">
+  <p class="share-title">${esc(ep.title)}</p>
+  ${stream ? `<div class="share-from"><label class="check"><input type="checkbox" data-from ${here ? 'checked' : ''}> <span>להתחיל מ־</span></label><input class="input" data-at dir="ltr" inputmode="numeric" value="${fmtTime(here)}" aria-label="נקודת ההתחלה (דקות:שניות)" ${here ? '' : 'disabled'}>${Pl.isCurrent(ep.id) ? '<button type="button" class="btn ghost small" data-now>הרגע הנוכחי</button>' : ''}</div><p class="share-hint" data-hint></p>` : ''}
+  <label class="field"><span>הקישור</span><input class="input" data-link readonly dir="ltr"></label>
+  <div class="share-ops">
+    <a class="btn primary" data-wa target="_blank" rel="noopener">וואטסאפ</a>
+    <button type="button" class="btn" data-copy>העתקת הקישור</button>
+    ${navigator.share ? '<button type="button" class="btn" data-sys>עוד אפשרויות…</button>' : ''}
+  </div>
+</div>`;
+    document.body.appendChild(d);
+    const $ = (sel) => d.querySelector(sel);
+    const at = () => {
+      if (!$('[data-from]')?.checked) return 0;
+      const t = U.parseTime($('[data-at]').value);
+      return Number.isFinite(t) && t > 0 ? t : NaN;
+    };
+    const paint = () => {
+      const t = at(), bad = Number.isNaN(t) || (ep.duration && t >= ep.duration);
+      if ($('[data-at]')) $('[data-at]').disabled = !$('[data-from]').checked;
+      if ($('[data-hint]')) $('[data-hint]').textContent = bad ? 'כתבו זמן כמו 12:30 (דקות:שניות) או 1:05:00.' : t ? `מי שיפתח את הקישור יתחיל לשמוע מ־${fmtTime(t)}.` : 'הקישור פותח את התוכנית מההתחלה.';
+      $('[data-hint]')?.classList.toggle('bad', !!bad);
+      const url = U.shareUrl(ep, bad ? 0 : t);
+      $('[data-link]').value = url;
+      $('[data-wa]').href = `https://wa.me/?text=${encodeURIComponent(`${ep.title}${t && !bad ? ` (מ־${fmtTime(t)})` : ''}\n${url}`)}`;
+    };
+    paint();
+    d.addEventListener('input', paint);
+    d.addEventListener('change', paint);
+    d.addEventListener('click', async (e) => {
+      if (e.target === d || e.target.closest('[data-close]')) { d.close(); return; }
+      if (e.target.closest('[data-now]')) { $('[data-from]').checked = true; $('[data-at]').value = fmtTime(Math.floor(Pl.time)); paint(); return; }
+      if (e.target.closest('[data-link]')) { e.target.select(); return; }
+      if (e.target.closest('[data-copy]')) { (await U.copy($('[data-link]').value)) ? U.notify('הקישור הועתק.', 'success') : U.notify('ההעתקה נכשלה. סמנו את הקישור והעתיקו.', 'error'); return; }
+      if (e.target.closest('[data-sys]')) { try { await navigator.share({ title: ep.title, text: ep.description.slice(0, 120), url: $('[data-link]').value }); d.close(); } catch { /* בוטל */ } }
+    });
+    d.addEventListener('close', () => d.remove());
+    d.showModal();
+  }
 
   /** פתיחה/קיפול של תיאור ארוך. בקיפול — חוזרים לראש הקטע אם הוא כבר גלל מעל המסך */
   function foldDesc(open) {

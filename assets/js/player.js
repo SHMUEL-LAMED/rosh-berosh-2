@@ -32,7 +32,13 @@
     share: svg('M12 3.5v11M7.8 7.7 12 3.5l4.2 4.2M5.5 12.5V18a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-5.5'),
     download: svg('M12 3.5v11M7.8 10.3 12 14.5l4.2-4.2M5.5 19.5h13'),
     close: svg('M6.5 6.5l11 11M17.5 6.5l-11 11'),
+    vol: svg('M4 9.5v5h3.5L12 18.5v-13L7.5 9.5zM15.5 9a4.2 4.2 0 0 1 0 6M18 6.5a8 8 0 0 1 0 11').replace('<svg', '<svg data-i="vol"'),
+    volLow: svg('M4 9.5v5h3.5L12 18.5v-13L7.5 9.5zM15.5 9a4.2 4.2 0 0 1 0 6').replace('<svg', '<svg data-i="low"'),
+    mute: svg('M4 9.5v5h3.5L12 18.5v-13L7.5 9.5zM15.5 9.5l5 5M20.5 9.5l-5 5').replace('<svg', '<svg data-i="mute"'),
   };
+
+  /** בחלק מהמכשירים (אייפון ואייפד) האתר לא יכול לשנות את עוצמת הקול — רק כפתורי המכשיר. שם יש רק השתקה. */
+  const VOLUME_WORKS = (() => { try { const a = new Audio(); a.volume = 0.5; return Math.abs(a.volume - 0.5) < 0.01; } catch { return false; } })();
 
   const emit = (type, detail = {}) => window.dispatchEvent(new CustomEvent('rosh:player', { detail: { type, episode: P.episode, time: audio.currentTime, ...detail } }));
 
@@ -78,6 +84,10 @@
     </div>
   </div>
   <div class="dock-extra">
+    <div class="dock-vol${VOLUME_WORKS ? '' : ' no-range'}" data-vol-wrap>
+      <button type="button" class="dock-btn" data-mute aria-label="עוצמת הקול" title="עוצמת הקול (M להשתקה)" aria-expanded="false">${ICONS.vol}${ICONS.volLow}${ICONS.mute}</button>
+      ${VOLUME_WORKS ? `<div class="dock-vol-pop" data-vol-pop><input type="range" class="dock-vol-range" data-vol min="0" max="100" step="5" value="100" aria-label="עוצמת הקול" dir="ltr"><button type="button" class="dock-vol-mute" data-mute-only>השתקה</button></div>` : ''}
+    </div>
     <button type="button" class="dock-btn" data-share aria-label="שיתוף הרגע הזה" title="שיתוף הרגע הזה">${ICONS.share}</button>
     <a class="dock-btn hide-sm" data-download href="#" download rel="noopener" aria-label="הורדת ההקלטה" title="הורדת ההקלטה">${ICONS.download}</a>
     <button type="button" class="dock-btn dock-close" data-close aria-label="סגירת הנגן" title="סגירת הנגן">${ICONS.close}</button>
@@ -91,6 +101,7 @@
       toggle: q('[data-toggle]'), cur: q('[data-cur]'), dur: q('[data-dur]'),
       scrub: q('[data-scrub]'), segs: q('[data-segs]'), markers: q('[data-markers]'), knob: q('[data-knob]'), tip: q('[data-tip]'),
       speed: q('[data-speed]'), download: q('[data-download]'),
+      volWrap: q('[data-vol-wrap]'), mute: q('[data-mute]'), vol: q('[data-vol]'), muteOnly: q('[data-mute-only]'),
     };
 
     q('[data-toggle]').addEventListener('click', toggle);
@@ -102,6 +113,23 @@
     q('[data-share]').addEventListener('click', shareMoment);
     q('[data-moment]').addEventListener('click', toggleMoment);
     P.els.speed.addEventListener('change', () => setRate(Number(P.els.speed.value)));
+
+    // עוצמת הקול: במחשב — כפתור השתקה ופס ליד; בטלפון הכפתור פותח פס קטן מעל הנגן
+    const phone = () => matchMedia('(max-width: 760px)').matches;
+    const closeVol = () => { P.els.volWrap.classList.remove('open'); P.els.mute.setAttribute('aria-expanded', 'false'); };
+    P.els.mute.addEventListener('click', () => {
+      if (VOLUME_WORKS && phone()) {
+        const open = P.els.volWrap.classList.toggle('open');
+        P.els.mute.setAttribute('aria-expanded', String(open));
+        if (open) P.els.vol.focus();
+        return;
+      }
+      toggleMute();
+    });
+    P.els.muteOnly?.addEventListener('click', toggleMute);
+    P.els.vol?.addEventListener('input', () => setVolume(Number(P.els.vol.value) / 100));
+    P.els.vol?.addEventListener('keydown', (e) => { if (e.key.startsWith('Arrow') || e.key === 'Home' || e.key === 'End') e.stopPropagation(); if (e.key === 'Escape') { closeVol(); P.els.mute.focus(); } });
+    document.addEventListener('pointerdown', (e) => { if (P.els.volWrap.classList.contains('open') && !P.els.volWrap.contains(e.target)) closeVol(); });
 
     // גרירה על הפס
     const sc = P.els.scrub;
@@ -123,7 +151,8 @@
 
     // העדפות (החלה של מה ששמור — לא שינוי של המאזין, ולכן לא נשמר מחדש בחשבון)
     setRate(S.prefs.get('rate', 1), true);
-    audio.volume = S.prefs.get('volume', 1);
+    if (VOLUME_WORKS) audio.volume = S.prefs.get('volume', 1);
+    paintVolume();
 
     // גובה הנגן בפועל (משתנה עם רוחב המסך, עם שבירת השורות ועם השוליים הבטוחים בטלפון),
     // כדי שסוף הדף וההודעות לא יוסתרו מאחוריו. בלי ResizeObserver נשאר הערך הקבוע שב־rosh.css.
@@ -218,6 +247,32 @@
   }
   function pause() { P.wantPlay = false; audio.pause(); }
   function toggle() { audio.paused ? play() : pause(); }
+
+  /** עוצמה 0–1. הזזה של הפס מבטלת השתקה; עוצמה 0 נחשבת השתקה. */
+  function setVolume(v) {
+    v = Math.min(1, Math.max(0, Number(v) || 0));
+    if (VOLUME_WORKS) audio.volume = v;
+    audio.muted = v === 0;
+  }
+  function toggleMute() {
+    if (audio.muted || (VOLUME_WORKS && audio.volume === 0)) {
+      audio.muted = false;
+      if (VOLUME_WORKS && audio.volume === 0) audio.volume = 0.5;
+    } else audio.muted = true;
+  }
+  function paintVolume() {
+    if (!P.els.mute) return;
+    const v = VOLUME_WORKS ? audio.volume : 1, silent = audio.muted || v === 0;
+    P.els.mute.dataset.level = silent ? 'mute' : v < 0.5 ? 'low' : 'vol';
+    P.els.mute.setAttribute('aria-label', silent ? 'הקול מושתק' : `עוצמת הקול ${Math.round(v * 100)}%`);
+    if (P.els.vol) {
+      const pct = silent ? 0 : Math.round(v * 100);
+      P.els.vol.value = String(pct);
+      P.els.vol.style.setProperty('--v', `${pct}%`);
+      P.els.vol.setAttribute('aria-valuetext', silent ? 'מושתק' : `${pct}%`);
+    }
+    if (P.els.muteOnly) P.els.muteOnly.textContent = silent ? 'ביטול השתקה' : 'השתקה';
+  }
   function seek(t) {
     t = Math.min(Math.max(0, t), dur() ? dur() - 0.25 : t);
     if (!isFinite(t)) return;
@@ -474,7 +529,10 @@
     if (dl) P.els.download.href = dl;
   });
   // רק שינוי אמיתי של העוצמה נשמר — לא החלת העוצמה השמורה בבניית הנגן
-  audio.addEventListener('volumechange', () => { if (audio.volume !== S.prefs.get('volume', 1)) S.prefs.set('volume', audio.volume); });
+  audio.addEventListener('volumechange', () => {
+    if (VOLUME_WORKS && audio.volume !== S.prefs.get('volume', 1)) S.prefs.set('volume', audio.volume);
+    paintVolume();
+  });
   // כשהדף נסגר או עובר לרקע (בטלפון זה לפעמים הרגע האחרון) — שליחה ב־sendBeacon, שלא נחתכת
   document.addEventListener('visibilitychange', () => { if (document.hidden) { save(true); flushListen(true); } });
   window.addEventListener('pagehide', () => { save(true); flushListen(true); });
@@ -500,6 +558,7 @@
       case 'KeyJ': seek(audio.currentTime - 15); break;
       case 'KeyL': seek(audio.currentTime + 15); break;
       case 'KeyR': random(); break;
+      case 'KeyM': toggleMute(); break;
       case 'Equal': case 'NumpadAdd': setRate(RATES[Math.min(RATES.length - 1, RATES.indexOf(audio.playbackRate) + 1)] || 1); break;
       case 'Minus': case 'NumpadSubtract': setRate(RATES[Math.max(0, RATES.indexOf(audio.playbackRate) - 1)] || 1); break;
       default:
@@ -525,11 +584,13 @@
   S.onSession(() => S.ready.then(restore));
 
   window.RoshPlayer = {
-    load, play, pause, toggle, seek, nextEpisode, prevEpisode, random, close, setRate, shareMoment, setMarkers, RATES,
+    load, play, pause, toggle, seek, nextEpisode, prevEpisode, random, close, setRate, shareMoment, setMarkers, setVolume, toggleMute, RATES, VOLUME_WORKS,
     get episode() { return P.episode; },
     get time() { return audio.currentTime; },
     get duration() { return dur(); },
     get paused() { return audio.paused; },
+    get volume() { return audio.volume; },
+    get muted() { return audio.muted; },
     get src() { return audio.currentSrc || audio.src; },
     isCurrent(id) { return P.episode?.id === id; },
   };

@@ -26,7 +26,8 @@
   const shows = list.filter((e) => e.season !== 'sets');
 
   /* ---------- גיבור ---------- */
-  document.getElementById('hero-eq').innerHTML = U.eqBars(56, 3);
+  // בטלפון חצי מהעמודות: אותו מראה, חצי מהאנימציות
+  document.getElementById('hero-eq').innerHTML = U.eqBars(matchMedia('(max-width: 760px)').matches ? 28 : 56, 3);
   const live = document.getElementById('hero-live');
   if (feat) {
     live.hidden = false;

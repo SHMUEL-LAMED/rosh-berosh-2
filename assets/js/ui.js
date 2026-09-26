@@ -339,6 +339,7 @@
   <kbd>Shift + ←</kbd><span>לתוכנית הקודמת</span>
   <kbd>0–9</kbd><span>קפיצה לאחוז מהתוכנית</span>
   <kbd>+ / −</kbd><span>מהירות</span>
+  <kbd>M</kbd><span>השתקה / ביטול השתקה</span>
   <kbd>R</kbd><span>תוכנית אקראית</span>
   <kbd>/</kbd><span>חיפוש (בארכיון)</span>
   <kbd>?</kbd><span>החלון הזה</span>
@@ -371,7 +372,17 @@
   const reduceMotion = () => (window.RoshTheme?.reducedMotion ? window.RoshTheme.reducedMotion() : typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches) || document.documentElement?.dataset?.lite === '1';
 
   let revealObs = null;
+  /** אנימציות שיצאו מהמסך נעצרות (האקולייזר, הסרט הנע, התקליט) — חוסך מעבד וסוללה בטלפון.
+   *  כל אזור עם data-anim-zone מקבל offscreen כשהוא לא נראה. */
+  let zoneIO = null;
+  function pauseOffscreen(root = document) {
+    if (typeof IntersectionObserver !== 'function' || typeof root?.querySelectorAll !== 'function') return;
+    zoneIO ||= new IntersectionObserver((entries) => { for (const x of entries) x.target.classList.toggle('offscreen', !x.isIntersecting); }, { rootMargin: '80px 0px' });
+    root.querySelectorAll('[data-anim-zone]:not([data-anim-watched])').forEach((el) => { el.setAttribute('data-anim-watched', ''); zoneIO.observe(el); });
+  }
+
   function reveal(root = document) {
+    pauseOffscreen(root);
     if (typeof root?.querySelectorAll !== 'function') return;
     const els = [...root.querySelectorAll('[data-reveal]:not(.in)')];
     if (!els.length) return;
@@ -632,5 +643,5 @@
     mountSubscribe(host);
   });
 
-  window.RoshUI = { banner, messageForm, mountSubscribe, esc, fmtTime, parseTime, fmtDuration, fmtDate, fmtHebDate, fmtWeekday, slugify, qs, header, footer, repaintHeader, actionButtons, paintActions, push, notify, kbdHelp, isTyping, copy, driveId, isDriveUrl, streamUrl, streamCandidates, downloadUrl, shareUrl, publicLinks, coverVars, hue, seasonVars, epCard, reveal, countUp, eqBars, reduceMotion, applyPrefs };
+  window.RoshUI = { banner, messageForm, mountSubscribe, esc, fmtTime, parseTime, fmtDuration, fmtDate, fmtHebDate, fmtWeekday, slugify, qs, header, footer, repaintHeader, actionButtons, paintActions, push, notify, kbdHelp, isTyping, copy, driveId, isDriveUrl, streamUrl, streamCandidates, downloadUrl, shareUrl, publicLinks, coverVars, hue, seasonVars, epCard, reveal, pauseOffscreen, countUp, eqBars, reduceMotion, applyPrefs };
 })();

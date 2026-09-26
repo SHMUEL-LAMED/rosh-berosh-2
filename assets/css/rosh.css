@@ -399,6 +399,11 @@ section[id] { scroll-margin-top: 110px; }
 
 /* ---------- כותרת האתר ---------- */
 
+/* עד שהסקריפט מצייר את הכותרת — אותו מקום בדיוק, כדי שהדף לא יקפוץ למטה כשהיא מופיעה */
+#site-header:empty { height: 71px; margin: 12px 0 10px; }
+/* אנימציות של אזור שיצא מהמסך נעצרות (ui.js → pauseOffscreen) */
+.offscreen, .offscreen * { animation-play-state: paused !important; }
+
 .site-header {
   position: sticky; top: 12px; z-index: 40;
   display: flex; align-items: center; justify-content: space-between; gap: 14px;
@@ -1032,6 +1037,8 @@ body.is-playing .vinyl.live { animation-play-state: running; }
 .search-box kbd { padding: 3px 9px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--kbd-bg); color: var(--muted); font: 700 11px var(--mono); }
 .filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 16px 0 22px; }
 .filters .spacer { flex: 1; }
+.filter-chips, .filter-tools { display: contents; }
+#filters:empty { min-height: 80px; }
 .filters .count { font-size: 12px; font-weight: 800; color: var(--muted); }
 
 
@@ -1230,6 +1237,23 @@ body.is-playing .dock-play::after { animation: ring 1.8s ease-out infinite; }
 .scrub:hover .knob, .scrub:focus-visible .knob { transform: scale(1.3); }
 .scrub .tip { position: absolute; bottom: calc(100% + 6px); transform: translateX(-50%); padding: 5px 10px; border-radius: 8px; background: var(--tip-bg); color: var(--tip-ink); font-size: 11px; font-weight: 800; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .15s; direction: rtl; }
 .dock-extra { display: flex; align-items: center; justify-content: flex-end; gap: 2px; }
+/* עוצמת הקול: אייקון לפי הרמה; במחשב פס ליד הכפתור, בטלפון פס קטן שנפתח מעל */
+.dock-vol { position: relative; display: flex; align-items: center; }
+.dock-vol [data-mute] svg { display: none; }
+.dock-vol [data-mute][data-level="vol"] svg[data-i="vol"], .dock-vol [data-mute][data-level="low"] svg[data-i="low"], .dock-vol [data-mute][data-level="mute"] svg[data-i="mute"] { display: block; }
+.dock-vol [data-mute][data-level="mute"] { color: var(--muted); }
+.dock-vol-pop { display: flex; align-items: center; }
+.dock-vol-mute { display: none; }
+.dock-vol-range {
+  -webkit-appearance: none; appearance: none; width: 86px; height: 22px; margin: 0 4px; background: transparent; cursor: pointer;
+  --v: 100%;
+}
+.dock-vol-range::-webkit-slider-runnable-track { height: 4px; border-radius: 4px; background: linear-gradient(90deg, var(--gold) var(--v), var(--progress-bg) var(--v)); }
+.dock-vol-range::-moz-range-track { height: 4px; border-radius: 4px; background: var(--progress-bg); }
+.dock-vol-range::-moz-range-progress { height: 4px; border-radius: 4px; background: var(--gold); }
+.dock-vol-range::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -5px; border-radius: 50%; background: var(--gold-ink); box-shadow: 0 0 0 3px rgb(var(--gold-rgb) / .25); }
+.dock-vol-range::-moz-range-thumb { width: 14px; height: 14px; border: 0; border-radius: 50%; background: var(--gold-ink); }
+.dock-vol-range:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 8px; }
 .dock-close svg { width: 16px; height: 16px; }
 body.has-dock { --dock-height: 100px; }
 
@@ -1256,6 +1280,17 @@ dialog.sheet::backdrop { background: var(--backdrop); -webkit-backdrop-filter: b
 dialog.sheet .section-title { padding: 20px 22px 14px; }
 dialog.sheet .section-title h2 { font-size: 40px; }
 dialog.sheet .card-body { padding: 18px 22px 22px; }
+.share-dlg .card-body { display: grid; gap: 14px; }
+.share-title { margin: 0; font-weight: 800; color: var(--text-strong); }
+.share-from { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.share-from .input { width: 110px; text-align: center; font-variant-numeric: tabular-nums; }
+.share-hint { margin: -4px 0 0; font-size: 13px; color: var(--muted); }
+.share-hint.bad { color: var(--error); }
+.share-ops { display: flex; flex-wrap: wrap; gap: 10px; }
+.guest-select { width: auto; max-width: 220px; min-height: 36px; padding-block: 6px; border-radius: 99px; font-size: 12px; font-weight: 800; }
+.guest-select.on { border-color: rgb(var(--gold-rgb) / .6); background: var(--gold-tint); color: var(--gold-ink); }
+.guest-link { color: inherit; font-weight: 800; text-decoration: underline; text-decoration-color: rgb(var(--gold-rgb) / .5); text-underline-offset: 3px; }
+.guest-link:hover { color: var(--gold-ink); text-decoration-color: currentColor; }
 .kbd-list { display: grid; grid-template-columns: auto 1fr; gap: 10px 16px; align-items: center; font-size: 14px; }
 .kbd-list kbd { justify-self: start; padding: 4px 10px; border: 1px solid var(--border-strong); border-bottom-width: 3px; border-radius: 8px; background: var(--kbd-bg); font: 700 12px var(--mono); direction: ltr; }
 
@@ -1285,6 +1320,13 @@ dialog.sheet .card-body { padding: 18px 22px 22px; }
 @media (max-width: 760px) {
   body { font-size: 15px; }
   .site-header { top: 8px; margin: 8px 0; padding: 8px 10px; border-radius: 18px; flex-wrap: wrap; }
+  #site-header:empty { height: 120px; margin: 8px 0; }
+  .filters { display: grid; gap: 10px; }
+  .filter-chips { --g: clamp(16px, 4vw, 40px); display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin-inline: calc(-1 * var(--g)); padding: 2px var(--g); scroll-padding-inline: var(--g); }
+  .filter-chips::-webkit-scrollbar { display: none; }
+  .filter-chips .chip { flex: none; }
+  .filter-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  #filters:empty { min-height: 90px; }
   .brand strong { font-size: 26px; }
   .site-nav { width: 100%; gap: 2px; overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
   .site-nav::-webkit-scrollbar { display: none; }
@@ -1309,6 +1351,15 @@ dialog.sheet .card-body { padding: 18px 22px 22px; }
   /* בטלפון: מה מתנגן + שיתוף/סגירה בשורה העליונה, מתחת הפס ואז הפקדים */
   .dock-inner { grid-template-columns: minmax(0, 1fr) auto; gap: 4px 8px; padding: 10px 10px 6px; border-radius: 20px; }
   .dock-extra { grid-area: 1 / 2; }
+  .dock-vol-pop {
+    position: absolute; bottom: calc(100% + 10px); inset-inline-end: -6px; z-index: 5; display: none;
+    flex-direction: column; gap: 10px; align-items: stretch; padding: 14px 14px 10px; min-width: 190px;
+    border: 1px solid var(--glass-border); border-radius: 18px; background: var(--glass-3); box-shadow: 0 16px 40px var(--sh-2);
+  }
+  .dock-vol.open .dock-vol-pop { display: flex; }
+  .dock-vol-range { width: 100%; height: 30px; margin: 0; }
+  .dock-vol-range::-webkit-slider-thumb { width: 22px; height: 22px; margin-top: -9px; }
+  .dock-vol-mute { display: block; min-height: 36px; border: 1px solid var(--border); border-radius: 99px; background: rgb(var(--fg-rgb) / .05); color: var(--text); font: inherit; font-size: 13px; font-weight: 800; }
   .dock-center { grid-column: 1 / -1; gap: 0; }
   .dock-bar { order: -1; gap: 8px; }
   .dock-bar time { min-width: 38px; }
@@ -1318,6 +1369,7 @@ dialog.sheet .card-body { padding: 18px 22px 22px; }
   body.has-dock { --dock-height: 140px; }   /* רק בלי ResizeObserver; אחרת player.js מודד את הגובה בפועל */
   .footer-mark { margin: 0 0 -14px; }
 }
+@media (max-width: 430px) { #filters:empty { min-height: 130px; } }
 /* טלפון צר מאוד: פקדים מעט קטנים יותר כדי שכל השורה תיכנס */
 @media (max-width: 359px) {
   .dock-controls .dock-btn { width: 34px; min-width: 34px; }

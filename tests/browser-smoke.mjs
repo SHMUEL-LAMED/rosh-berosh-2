@@ -20,6 +20,20 @@ if (process.env.HTTPS_PROXY) {
 }
 const browser = await chromium.launch(launch);
 const ctx = await browser.newContext({ locale: 'he-IL', viewport: { width: 1200, height: 900 }, ignoreHTTPSErrors: !!process.env.HTTPS_PROXY });
+if (!process.env.STREAM) {
+  // בלי STREAM=1 ההקלטה מגיעה מהבדיקה ולא מה־Worker האמיתי, כדי שתקלה ברשת או בשרת לא
+  // תכשיל את בדיקות הנגן: 25 דקות של שקט (WAV, 8kHz, 8 ביט), כדי שקפיצה לדקה 20 תעבוד
+  const rate = 8000, len = rate * 1500;
+  const wav = Buffer.alloc(44 + len, 0x80);
+  wav.write('RIFF', 0); wav.writeUInt32LE(36 + len, 4); wav.write('WAVEfmt ', 8); wav.writeUInt32LE(16, 16);
+  wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22); wav.writeUInt32LE(rate, 24); wav.writeUInt32LE(rate, 28);
+  wav.writeUInt16LE(1, 32); wav.writeUInt16LE(8, 34); wav.write('data', 36); wav.writeUInt32LE(len, 40);
+  await ctx.route('**/api/program/stream/**', (route) => {
+    const m = /bytes=(\d+)-(\d*)/.exec(route.request().headers().range || '');
+    const start = m ? Number(m[1]) : 0, end = m && m[2] ? Math.min(Number(m[2]), wav.length - 1) : wav.length - 1;
+    return route.fulfill({ status: m ? 206 : 200, headers: { 'access-control-allow-origin': '*', 'accept-ranges': 'bytes', 'content-type': 'audio/wav', ...(m ? { 'content-range': `bytes ${start}-${end}/${wav.length}` } : {}) }, body: wav.subarray(start, end + 1) });
+  });
+}
 const page = await ctx.newPage();
 const errors = [];
 page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
@@ -45,6 +59,13 @@ await page.click('#featured [data-play]');
 await page.waitForSelector('.dock.open');
 check(await page.locator('.dock.open').count() === 1, 'הנגן הקבוע נפתח');
 check((await page.locator('.dock [data-moment]').count()) === 1, 'כפתור "♡ הרגע הזה" בנגן');
+await page.locator('.dock [data-vol]').fill('40');
+check(Math.abs((await page.evaluate(() => window.RoshPlayer.volume)) - 0.4) < 0.01, 'פס עוצמת הקול בנגן משנה את העוצמה');
+await page.click('.dock [data-mute]');
+await page.waitForFunction(() => document.querySelector('.dock [data-mute]').dataset.level === 'mute');
+check(await page.evaluate(() => window.RoshPlayer.muted), 'כפתור ההשתקה בנגן');
+await page.click('.dock [data-mute]');
+check(!(await page.evaluate(() => window.RoshPlayer.muted)), 'לחיצה נוספת מבטלת את ההשתקה');
 const apiBase = await page.evaluate(() => window.RoshStore.site?.storage?.cloudflare?.apiBase || '');
 const src = await page.evaluate(() => window.RoshPlayer.src);
 check(apiBase ? src.startsWith(`${apiBase}/api/program/stream/`) : /^https:\/\/drive\.usercontent\.google\.com\//.test(src), 'הנגן מזרים דרך ה־Worker (בלי נגן חיצוני)');

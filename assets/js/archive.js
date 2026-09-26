@@ -21,6 +21,7 @@
     season: params.get('season') || '',
     audio: params.get('audio') === '1',
     later: params.get('later') === '1',   // רק מה ששמרתם "לאחר כך"
+    guest: params.get('guest') || '',     // רק תוכניות עם האורח הזה
     sort: params.get('sort') || 'new',
     view: params.get('view') || S.prefs.get('archiveView', 'grid'),
   };
@@ -37,6 +38,17 @@
 
   const seasons = S.seasons();
   const all = S.episodes();
+  /** אותו אורח גם כשהשם נכתב עם רווחים או ניקוד אחרים */
+  const guestKey = (name) => String(name || '').replace(/[\u0591-\u05C7]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+  /** כל האורחים בקטלוג: השם הנפוץ ביותר לכל אורח, וכמה תוכניות — מהרבות למעטות */
+  const guests = (() => {
+    const m = new Map();
+    for (const e of all) for (const g of e.guests) {
+      const k = guestKey(g); if (!k) continue;
+      const x = m.get(k) || { key: k, name: g.replace(/\s+/g, ' ').trim(), count: 0 }; x.count++; m.set(k, x);
+    }
+    return [...m.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'he'));
+  })();
 
   function syncUrl() {
     const p = new URLSearchParams();
@@ -44,6 +56,7 @@
     if (state.season) p.set('season', state.season);
     if (state.audio) p.set('audio', '1');
     if (state.later) p.set('later', '1');
+    if (state.guest) p.set('guest', state.guest);
     if (state.sort !== 'new') p.set('sort', state.sort);
     if (state.view !== 'grid') p.set('view', state.view);
     history.replaceState(null, '', `${location.pathname}${p.toString() ? '?' + p : ''}`);
@@ -51,9 +64,19 @@
   }
 
   function renderFilters() {
+    // שתי קבוצות: העונות, ואחריהן הכלים (אורח, מיון, תצוגה). במחשב הכול בשורה אחת; בטלפון
+    // העונות בשורה שגוללים לצד, והכלים מתחתיה — פחות גובה, ואותו גובה תמיד
     document.getElementById('filters').innerHTML = `
+<div class="filter-chips">
 <button type="button" class="chip" data-season="" aria-pressed="${!state.season}">כל העונות</button>
 ${seasons.filter((s) => s.count).map((s) => `<button type="button" class="chip" data-season="${esc(s.id)}" style="${U.seasonVars(s.id)}" aria-pressed="${state.season === s.id}">${esc(s.title)} <span style="opacity:.6">${s.count}</span></button>`).join('')}
+</div>
+<div class="filter-tools">
+${guests.length ? `<label class="visually-hidden" for="guest">אורח</label>
+<select id="guest" class="input guest-select${state.guest ? ' on' : ''}">
+  <option value="">כל האורחים</option>
+  ${guests.map((g) => `<option value="${esc(g.name)}" ${guestKey(state.guest) === g.key ? 'selected' : ''}>${esc(g.name)} (${g.count})</option>`).join('')}
+</select>` : ''}
 <span class="spacer"></span>
 <label class="visually-hidden" for="sort">מיון</label>
 <select id="sort" class="input" style="width:auto;min-height:36px;padding-block:6px;border-radius:99px;font-size:12px;font-weight:800">
@@ -66,6 +89,7 @@ ${seasons.filter((s) => s.count).map((s) => `<button type="button" class="chip" 
   <button type="button" data-view="grid" aria-pressed="${state.view === 'grid'}">רשת</button>
   <button type="button" data-view="list" aria-pressed="${state.view === 'list'}">רשימה</button>
   <button type="button" data-view="seasons" aria-pressed="${state.view === 'seasons'}">לפי עונות</button>
+</div>
 </div>`;
   }
 
@@ -74,6 +98,7 @@ ${seasons.filter((s) => s.count).map((s) => `<button type="button" class="chip" 
     if (state.season) list = list.filter((e) => e.season === state.season);
     if (state.audio) list = list.filter((e) => e.stream);
     if (state.later) { const l = S.later.list(); list = list.filter((e) => l.includes(e.id)); }
+    if (state.guest) { const k = guestKey(state.guest); list = list.filter((e) => e.guests.some((g) => guestKey(g) === k)); }
     list = S.searchEpisodes(state.q, list);
     const by = {
       new: (a, b) => (b.date || '').localeCompare(a.date || '') || (b.number || 0) - (a.number || 0),
@@ -132,7 +157,7 @@ ${seasons.filter((s) => s.count).map((s) => `<button type="button" class="chip" 
 
     if (!list.length) {
       const alt = state.q ? S.suggest(state.q) : '';
-      R.innerHTML = `<div class="state"><span class="mark">♫</span><h3>לא נמצאו תוכניות</h3><p>${state.q ? `אין תוכנית שמתאימה ל"${esc(state.q)}". נסו מילה אחרת או נקו את הסינון.` : 'עדיין אין תוכניות בעונה הזו.'}</p>${alt ? `<p>אולי התכוונתם ל־<button type="button" class="link-btn" data-suggest="${esc(alt)}">${esc(alt)}</button>?</p>` : ''}${state.q || state.season || state.audio || state.later ? '<button type="button" class="btn" data-clear>ניקוי הסינון</button>' : ''}</div>`;
+      R.innerHTML = `<div class="state"><span class="mark">♫</span><h3>לא נמצאו תוכניות</h3><p>${state.q ? `אין תוכנית שמתאימה ל"${esc(state.q)}". נסו מילה אחרת או נקו את הסינון.` : state.guest ? `אין תוכניות עם ${esc(state.guest)} בסינון הזה.` : 'עדיין אין תוכניות בעונה הזו.'}</p>${alt ? `<p>אולי התכוונתם ל־<button type="button" class="link-btn" data-suggest="${esc(alt)}">${esc(alt)}</button>?</p>` : ''}${state.q || state.season || state.audio || state.later || state.guest ? '<button type="button" class="btn" data-clear>ניקוי הסינון</button>' : ''}</div>`;
       syncUrl();
       return;
     }
@@ -169,11 +194,14 @@ ${seasons.filter((s) => s.count).map((s) => `<button type="button" class="chip" 
     if (sug) { qEl.value = state.q = sug.dataset.suggest; render(); return; }
     const v = e.target.closest('[data-view]');
     if (v) { state.view = v.dataset.view; renderFilters(); render(); return; }
-    if (e.target.closest('[data-clear]')) { Object.assign(state, { q: '', season: '', audio: false, later: false }); qEl.value = ''; renderFilters(); render(); return; }
+    if (e.target.closest('[data-clear]')) { Object.assign(state, { q: '', season: '', audio: false, later: false, guest: '' }); qEl.value = ''; renderFilters(); render(); return; }
     const play = e.target.closest('[data-play]');
     if (play) { const ep = S.byId(play.dataset.play); if (ep) Pl.isCurrent(ep.id) ? Pl.toggle() : Pl.load(ep); }
   }, on);
-  document.addEventListener('change', (e) => { if (e.target.id === 'sort') { state.sort = e.target.value; render(); } }, on);
+  document.addEventListener('change', (e) => {
+    if (e.target.id === 'sort') { state.sort = e.target.value; render(); }
+    if (e.target.id === 'guest') { state.guest = e.target.value; e.target.classList.toggle('on', !!state.guest); render(); }
+  }, on);
 
   window.addEventListener('rosh:player', (ev) => {
     const id = ev.detail.episode?.id;

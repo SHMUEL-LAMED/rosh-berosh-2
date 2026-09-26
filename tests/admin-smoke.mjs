@@ -478,6 +478,33 @@ check(await page.evaluate(() => document.body.classList.contains('admin-locked')
   await p2.close();
 }
 
+/* ---------- חיפוש לפי אורח ---------- */
+{
+  const before = published;
+  const base = published || catalog;
+  // שלוש התוכניות האחרונות ברשימה — ישנות ומוצגות (בראש הרשימה יש כאן תוכניות בדיקה מתוזמנות)
+  const n = base.episodes.length;
+  const eps = base.episodes.map((e, i) => (i === n - 1 || i === n - 3 ? { ...e, guests: ['דוד לוי'] } : i === n - 2 ? { ...e, guests: ['דוד  לוי', 'שרה כהן'] } : e));
+  published = { ...base, episodes: eps };
+  const p3 = await ctx.newPage();
+  p3.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+  await p3.goto(`${BASE}/archive.html`);
+  await p3.waitForSelector('#guest');
+  const opts = await p3.$$eval('#guest option', (o) => o.map((x) => x.textContent));
+  check(opts[1] === 'דוד לוי (3)' && opts.includes('שרה כהן (1)'), 'רשימת האורחים בארכיון, עם מספר התוכניות (אותו שם גם עם רווח כפול)');
+  await p3.selectOption('#guest', 'דוד לוי');
+  await p3.waitForFunction(() => document.querySelectorAll('#results .ep-card').length === 3);
+  check(p3.url().includes('guest='), 'סינון לפי אורח — 3 תוכניות, והכתובת נשמרת');
+  const slug = eps[n - 2].slug;
+  await p3.goto(`${BASE}/episode.html?ep=${encodeURIComponent(slug)}`);
+  await p3.waitForSelector('.guest-link');
+  await p3.click('.guest-link >> text=שרה כהן');
+  await p3.waitForFunction(() => document.querySelectorAll('#results .ep-card').length === 1);
+  check((await p3.inputValue('#guest')) === 'שרה כהן', 'שם אורח בדף התוכנית מוביל לכל התוכניות שלו');
+  await p3.close();
+  published = before;
+}
+
 // תשובות 401/404 מהשרת המדומה הן חלק מהתרחישים (קוד מעבר שפג, נתיב שלא קיים בשרת ישן)
 const real = errors.filter((e) => !/favicon|manifest|sw\.js|serviceWorker|net::ERR_|accounts\.google|gsi|status of 40[149]/i.test(e));
 check(real.length === 0, `אין שגיאות JavaScript${real.length ? `: ${real.join(' | ')}` : ''}`);

@@ -661,7 +661,7 @@
     if (!el || !S?.sb?.configured) return;
     const u = S.sb.user;
     if (!u) {
-      el.innerHTML = '<div class="subscribe-google"><span>מתחברים עם Google, וההצטרפות היא בלחיצה אחת — בלי להקליד כתובת.</span><div class="google-slot" data-google></div><a class="btn ghost small" href="#" data-subscribe-fallback>בעיה עם הכפתור? כניסה דרך אתר הסקר</a></div>';
+      el.innerHTML = '<div class="subscribe-google"><span>מתחברים עם Google, וההצטרפות היא בלחיצה אחת — בלי להקליד כתובת.</span><div class="google-slot" data-google></div><a class="btn ghost small" href="#" data-subscribe-fallback>בעיה עם הכפתור? כניסה בחלון נפרד</a></div>';
       // הכפתור של Google (סקריפט חיצוני כבד) נטען רק כשהכרטיס מתקרב למסך — לא בטעינת הדף
       const slot = el.querySelector('[data-google]');
       whenNear(slot, async () => {

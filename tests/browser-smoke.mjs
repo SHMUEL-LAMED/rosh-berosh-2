@@ -128,7 +128,7 @@ await page.evaluate(() => window.RoshPlayer.pause());
 await page.evaluate(() => document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'ל', code: 'KeyK', bubbles: true })));
 check(!(await page.evaluate(() => window.RoshPlayer.paused)), 'הקיצור K עובד גם במקלדת בעברית (לפי המקש הפיזי)');
 await page.evaluate(() => window.RoshPlayer.pause());
-// קישור "#" שהדף מטפל בו (כמו "כניסה דרך אתר הסקר" באזור האישי) אינו ניווט: הדף לא נטען מחדש
+// קישור "#" שהדף מטפל בו (כמו "כניסה בחלון נפרד" באזור האישי) אינו ניווט: הדף לא נטען מחדש
 const urlBeforeHash = page.url();
 await page.evaluate(() => {
   document.querySelector('.shell').dataset.probe = '1';

@@ -107,7 +107,7 @@
   </header>
   <div class="poll-options" role="${p.multi ? 'group' : 'radiogroup'}" aria-labelledby="poll-q-${esc(p.id)}">${opts2.map(optionHtml).join('')}</div>
   <footer class="poll-foot">${foot}${totalLine}</footer>
-  ${ui.login ? `<div class="poll-login"><p>כדי שכל מאזין יצביע פעם אחת, מתחברים עם Google — בלחיצה אחת. הבחירה שלכם נשמרת.</p><div class="google-slot" data-poll-google></div><a href="#" class="cue-hint" data-poll-site-login>בעיה עם הכפתור? כניסה דרך אתר הסקר</a></div>` : ''}
+  ${ui.login ? `<div class="poll-login"><p>כדי שכל מאזין יצביע פעם אחת, מתחברים עם Google — בלחיצה אחת. הבחירה שלכם נשמרת.</p><div class="google-slot" data-poll-google></div><a href="#" class="cue-hint" data-poll-site-login>בעיה עם הכפתור? כניסה בחלון נפרד</a></div>` : ''}
   ${ui.error ? `<p class="poll-error" role="alert">${esc(ui.error)}</p>` : ''}
 </article>`;
   }

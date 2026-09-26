@@ -61,7 +61,7 @@
   function renderSubscription() {
     const box = $('me-subscribe'); if (!box) return;
     if (!S.sb.configured || !S.sb.user) { box.innerHTML = ''; return; }
-    box.innerHTML = `<div class="section-title"><div><p class="kicker">רשימת התפוצה</p><h2>התוכנית החדשה במייל</h2></div></div><div class="card-body"><div data-subscribe-host></div></div>`;
+    box.innerHTML = `<div class="section-title"><div><p class="kicker">רשימת התפוצה</p><h2>התוכנית החדשה במייל</h2></div></div><div class="card-body"><div data-subscribe-host="manage"></div></div>`;
     U.mountSubscribe(box.querySelector('[data-subscribe-host]'));
   }
 

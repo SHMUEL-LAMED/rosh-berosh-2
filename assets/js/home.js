@@ -142,11 +142,34 @@
 </div>` : '';
 
   /* ---------- הקהילה: פרטי הקשר נערכים בניהול ---------- */
+  const ICONS = {
+    phone: '<path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1z"/>',
+    chat: '<path d="M4 4h16a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H9l-4.3 3.4A.5.5 0 0 1 4 20V5a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="8.5" cy="10.5" r="1.3"/><circle cx="12" cy="10.5" r="1.3"/><circle cx="15.5" cy="10.5" r="1.3"/>',
+    write: '<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M13.5 6.5l4 4" fill="none" stroke="currentColor" stroke-width="2"/>',
+  };
+  const icon = (k) => `<span class="way-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor">${ICONS[k]}</svg></span>`;
   function communityHtml() {
     const c = S.settings.contacts || {};
     const tel = (n) => String(n || '').replace(/[^\d+]/g, '');
     const mail = (subject) => (c.email ? `mailto:${esc(c.email)}?subject=${encodeURIComponent(subject)}` : '');
-    return `<div class="community-grid"><article class="card card-body"><p class="kicker">קו התוכן</p><h2>גם בטלפון</h2>${c.phoneNote ? `<p>${esc(c.phoneNote)}</p>` : ''}${c.phone ? `<a class="btn" href="tel:${tel(c.phone)}" dir="ltr">${esc(c.phone)}</a>` : ''}${c.phone2 ? `<p style="margin-top:10px">מספר נוסף: <a href="tel:${tel(c.phone2)}" dir="ltr">${esc(c.phone2)}</a></p>` : ''}</article><article class="card card-body"><p class="kicker">מדברים איתנו</p><h2>הקול שלכם</h2>${c.hostsNote ? `<p>${esc(c.hostsNote)}</p>` : ''}${c.email ? `<a class="btn" href="${mail("צרף לצ'אט")}">בקשת הצטרפות לצ׳אט</a>` : ''}${c.chatNote ? `<p style="margin-top:10px">${esc(c.chatNote)}</p>` : ''}${U.messageForm({ title: 'או כתבו כאן', hint: 'ההודעה מגיעה ישירות למגישים.' })}</article></div>`;
+    const phone = c.phone || c.phone2 || c.phoneNote ? `
+  <article class="way" style="--way:var(--gold-rgb)">${icon('phone')}
+    <p class="kicker">קו התוכן</p><h3>גם בטלפון</h3>
+    ${c.phoneNote ? `<p>${esc(c.phoneNote)}</p>` : ''}
+    <div class="way-foot">${c.phone ? `<a class="btn primary way-phone" href="tel:${tel(c.phone)}" dir="ltr">${esc(c.phone)}</a>` : ''}${c.phone2 ? `<small>מספר נוסף: <a href="tel:${tel(c.phone2)}" dir="ltr">${esc(c.phone2)}</a></small>` : ''}</div>
+  </article>` : '';
+    const chat = c.hostsNote || c.email || c.chatNote ? `
+  <article class="way" style="--way:var(--violet-rgb)">${icon('chat')}
+    <p class="kicker">מדברים איתנו</p><h3>הקול שלכם</h3>
+    ${c.hostsNote ? `<p>${esc(c.hostsNote)}</p>` : ''}
+    <div class="way-foot">${c.email ? `<a class="btn" href="${mail("צרף לצ'אט")}">בקשת הצטרפות לצ׳אט <span>←</span></a>` : ''}${c.chatNote ? `<small>${esc(c.chatNote)}</small>` : ''}</div>
+  </article>` : '';
+    const form = U.messageForm({ title: '', hint: 'שאלה, תגובה, בקשה לשיר או רעיון לפרק — המגישים קוראים כל הודעה.' });
+    const write = form ? `
+  <article class="way way-write" style="--way:56 225 255">${icon('write')}
+    <p class="kicker">כתבו כאן</p><h3>ישר למגישים</h3>${form}
+  </article>` : '';
+    return `<div class="community-ways">${phone}${chat}${write}</div>`;
   }
 
   /* ---------- הקהילה ---------- */
@@ -154,12 +177,19 @@
   const Fo = document.getElementById('follow');
   Fo.setAttribute('data-reveal', '');
   Fo.innerHTML = `
-<section class="subscribe-card">
-  <div class="subscribe-copy"><b>נשארים בראש</b><small>התוכנית החדשה ישירות למייל, בכל שבועיים.${S.sb.configured ? '' : ' שלחו בקשת הצטרפות לתפוצה.'}</small></div>
-  ${S.sb.configured ? '<div data-subscribe-host></div>' : `<a class="continue btn xl primary" href="mailto:${esc(S.settings.contacts?.email || '')}?subject=${encodeURIComponent('צרף')}">הצטרפות לתפוצה</a>`}
-  ${links.length ? `<p class="subscribe-note">${links.map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>`).join(' · ')}</p>` : ''}
-</section>
-${communityHtml()}`;
+<div class="community">
+  <header class="community-head">
+    <p class="kicker">הקהילה</p>
+    <h2>בואו להיות חלק מהשיחה</h2>
+    <p>ראש בראש נבנית גם מהמאזינים: השאלות, התגובות והבקשות שלכם מגיעות לשידור. בחרו איך הכי נוח לכם להיות בקשר.</p>
+  </header>
+  <section class="subscribe-card">
+    <div class="subscribe-copy"><b>נשארים בראש</b><small>התוכנית החדשה ישירות למייל, בכל שבועיים.${S.sb.configured ? '' : ' שלחו בקשת הצטרפות לתפוצה.'}</small></div>
+    ${S.sb.configured ? '<div data-subscribe-host></div>' : `<a class="continue btn xl primary" href="mailto:${esc(S.settings.contacts?.email || '')}?subject=${encodeURIComponent('צרף')}">הצטרפות לתפוצה</a>`}
+  </section>
+  ${communityHtml()}
+  ${links.length ? `<nav class="community-links" aria-label="עוד מקומות לעקוב">${links.map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>`).join('')}</nav>` : ''}
+</div>`;
   U.mountSubscribe(Fo.querySelector('[data-subscribe-host]'));
 
   U.reveal();

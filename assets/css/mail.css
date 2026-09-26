@@ -268,3 +268,17 @@ dialog.sheet.mail-sheet { width: min(1260px, calc(100% - 32px)); }
   .mc-input-tools { flex-wrap: wrap; }
   .mc-input-tools > input { flex-basis: 100%; }
 }
+
+/* הסבר חד־פעמי לפני החיבור הראשון ל־Gmail */
+dialog.gmail-intro { width: min(560px, 94vw); }
+.gmail-intro .card-body { display: grid; gap: 12px; }
+.gmail-intro .card-body p { margin: 0; line-height: 1.75; color: var(--text); }
+.gi-warn { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border: 1px solid rgb(var(--gold-rgb) / .5); border-radius: 14px; background: var(--gold-tint); }
+.gi-warn span { color: var(--gold-ink); font-size: 18px; line-height: 1.5; }
+.gi-steps { margin: 0; padding: 0; list-style: none; counter-reset: gi; display: grid; gap: 8px; }
+.gi-steps li { counter-increment: gi; display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 14px; background: rgb(var(--fg-rgb) / .03); }
+.gi-steps li::before { content: counter(gi); flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--gold); color: #15110a; font-weight: 900; font-size: 14px; }
+.gi-note { font-size: 13.5px; color: var(--muted) !important; }
+.gmail-intro .card-foot { justify-content: flex-end; }
+.mc-auth-help { border: 0; background: none; padding: 4px 2px; color: var(--gold-ink); font: inherit; font-size: 13px; font-weight: 800; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.mc-auth-help:hover { color: var(--gold-hover); }

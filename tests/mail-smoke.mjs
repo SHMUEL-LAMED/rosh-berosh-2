@@ -151,10 +151,23 @@ await page.click('[data-mview="phone"]');
 await settle(200);
 check(await page.locator('[data-m-frame]').evaluate((f) => f.getBoundingClientRect().width <= 392), 'תצוגת טלפון');
 
+/* ---------- הסבר חד־פעמי לפני החיבור הראשון ל־Gmail ---------- */
+check((await page.locator('[data-mop="auth-help"]').innerText()) === 'איך מחברים את Gmail?', 'קישור "איך מחברים את Gmail?" ליד הכפתור');
+await page.click('[data-mop="create"]');
+await page.waitForSelector('#dlg-gmail-intro[open]');
+check((await page.locator('#gmail-intro-title').innerText()) === 'חיבור חד־פעמי ל־Gmail' && (await page.locator('#dlg-gmail-intro .gi-steps li').count()) === 4, 'בפעם הראשונה: חלון הסבר לפני החלון של Google, עם ארבעה צעדים');
+check(tokenRequests === 0, 'חלון Google לא נפתח לפני ההסבר');
+await page.click('#dlg-gmail-intro .card-foot [data-gi="cancel"]');
+await settle(200);
+check(tokenRequests === 0 && drafts.length === 0 && !(await page.locator('#dlg-gmail-intro').count()), '"ביטול" — בלי חיבור ובלי טיוטה');
+
 /* ---------- יצירת הטיוטה בג'ימייל ---------- */
 await page.click('[data-mop="create"]');
+await page.waitForSelector('#dlg-gmail-intro[open]');
+await page.click('#dlg-gmail-intro [data-gi="go"]');
+check(tokenRequests === 1, '"הבנתי, המשך לאישור" פותח את חלון Google מיד, מתוך הלחיצה');
 await page.waitForSelector('.mc-done', { timeout: 10000 });
-check(tokenRequests === 1, 'הרשאה לג\'ימייל נתבקשה פעם אחת, מתוך הלחיצה');
+check(await page.evaluate(() => window.RoshStore.prefs.get('mailAuthIntroSeen', false) === true && localStorage.getItem('rosh:mailAuthIntroSeen') === '1'), 'ההסבר נשמר כ"נראה" בחשבון ובמכשיר');
 check(await page.evaluate(() => window.__tokenCfg.scope === 'https://www.googleapis.com/auth/gmail.compose' && window.__lastHint === 'admin@example.com'), 'רק הרשאת gmail.compose, לחשבון המחובר');
 check(drafts.length === 1, 'נוצרה טיוטה אחת');
 {
@@ -208,7 +221,7 @@ await page.fill('[data-m="to"]', 'admin@example.com');
 await settle(3500);
 check(userdata?.prefs?.mailDraft?.style === 'gold' && userdata.prefs.mailDraft.accent === '#1d4ed8' && userdata.prefs.mailDraft.show?.phone === false, 'הסגנון והבחירות נשמרו בחשבון');
 check(String(userdata?.prefs?.mailDraft?.subject || '').includes('{{title}}') && !String(userdata.prefs.mailDraft.subject).includes(EP.title), 'הנושא נשמר כתבנית — בפעם הבאה ייכנס שם התוכנית הבאה');
-check(!(await page.evaluate(() => Object.keys(localStorage).some((k) => /mail/i.test(k)))), 'שום דבר מהמייל לא נשמר במכשיר');
+check(!(await page.evaluate(() => Object.keys(localStorage).some((k) => /mail/i.test(k) && k !== 'rosh:mailAuthIntroSeen'))), 'שום דבר מהמייל לא נשמר במכשיר');
 
 // מעבר לתוכנית אחרת: הניסוח נשאר, השם מתחלף
 const other = catalog.episodes.find((e) => e.id !== EP.id && e.title);
@@ -500,7 +513,7 @@ check(userdata?.prefs?.mailWork?.[`ep:${EP.id}`] && !('description' in userdata.
 }
 await settle(3500);
 check(userdata?.prefs?.mailTemplates?.[0]?.name === 'חגים' && userdata.prefs.mailTemplates[0].data.style === 'ocean', 'התבניות נשמרות בחשבון');
-check(!(await page.evaluate(() => Object.keys(localStorage).some((k) => /mail/i.test(k)))), 'גם עכשיו — שום דבר מהמייל לא במכשיר');
+check(!(await page.evaluate(() => Object.keys(localStorage).some((k) => /mail/i.test(k) && k !== 'rosh:mailAuthIntroSeen'))), 'גם עכשיו — שום דבר מהמייל לא במכשיר');
 await page.setViewportSize({ width: 390, height: 844 });
 await settle(300);
 check(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'בטלפון: בלי גלילה לצדדים');
@@ -534,6 +547,28 @@ await page.click('#editor [data-op="mail"]');
 await page.waitForSelector('#dlg-mail[open] .mail-composer');
 check((await page.locator('#dlg-mail [data-m="ep"]').inputValue()) === EP.id, 'בניהול: "✉ מייל למאזינים" פותח את העורך על התוכנית');
 check(await page.evaluate(() => { const d = document.querySelector('#dlg-mail'); const h = document.getElementById(d.getAttribute('aria-labelledby')); return !!h && d.contains(h); }), 'לחלון יש כותרת נגישה');
+// בחלון בניהול: אותו הסבר, דרך "איך מחברים את Gmail?", ו"המשך" מחבר את Gmail
+{
+  const before = tokenRequests;
+  await page.click('#dlg-mail [data-mop="auth-help"]');
+  await page.waitForSelector('#dlg-gmail-intro[open]');
+  await page.click('#dlg-gmail-intro [data-gi="go"]');
+  check(tokenRequests === before + 1, 'בניהול: "איך מחברים את Gmail?" פותח את ההסבר, ו"המשך" פותח את חלון Google');
+  await settle(300);
+  // Google לא אישר (access_denied) — בפעם הבאה ההסבר מופיע שוב
+  await page.reload();
+  await page.waitForSelector('#editor [data-op="mail"]', { timeout: 15000 });
+  await page.click('#editor [data-op="mail"]');
+  await page.waitForSelector('#dlg-mail[open] .mail-composer');
+  await page.evaluate(() => { window.__deny = true; });
+  await page.click('#dlg-mail [data-mop="test"]');
+  check(!(await page.locator('#dlg-gmail-intro').count()), 'מי שכבר ראה את ההסבר — ישר לחלון Google');
+  await page.waitForFunction(() => /לא אישרתם/.test(document.querySelector('#dlg-mail [data-m-result]')?.innerText || ''), null, { timeout: 5000 }).catch(() => {});
+  await page.evaluate(() => { window.__deny = false; });
+  await page.click('#dlg-mail [data-mop="test"]');
+  check((await page.locator('#dlg-gmail-intro[open]').count()) === 1, 'אחרי "לא אישרתם" — ההסבר מופיע שוב');
+  await page.click('#dlg-gmail-intro [data-gi="cancel"] >> nth=0');
+}
 await page.click('#dlg-mail [data-close]');
 await page.click('[data-op="new"]');
 await page.fill('[data-f="title"]', 'תוכנית חדשה למייל');

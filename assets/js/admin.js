@@ -27,7 +27,8 @@
     location.replace(target);
     return;
   }
-  const paintHeader = () => { $('#site-header').innerHTML = EMBED ? '' : U.header('admin', site); };
+  // מוטמע בניהול של אתר הסקר: בלי כותרת, וגם בלי המקום השמור לה (rosh.css → #site-header:empty)
+  const paintHeader = () => { const h = $('#site-header'); h.hidden = EMBED; h.innerHTML = EMBED ? '' : U.header('admin', site); };
   paintHeader();
   $('#site-footer').innerHTML = EMBED ? '' : U.footer(site);
 

@@ -25,7 +25,8 @@ assert(b.html.includes('href="https://api.example/api/program/download/ep-90"'),
 assert(b.text.includes(ctx.listenUrl) && b.text.includes(ctx.downloadUrl), 'Plain-text version carries both links');
 // מימין לשמאל, התמונה, האורחים, התיאור, הקישורים, הטלפון וההסרה
 assert.match(b.html, /<html lang="he" dir="rtl">/);
-assert(b.html.includes('https://media.example/t.jpg'), 'Side cover uses the small image');
+assert(b.html.includes('https://media.example/c.jpg') && b.html.indexOf('media.example/c.jpg') < b.html.indexOf('class="h1"'), 'The program image is in the header, above the title');
+assert(M.build(ep, ctx, { cover: 'side' }).html.indexOf('media.example/c.jpg') < M.build(ep, ctx, { cover: 'side' }).html.indexOf('class="h1"'), 'An older "side" setting shows the image in the header too');
 assert(b.html.includes('עם דוד לוי') && b.html.includes('פסקה שנייה') && b.html.includes('https://p.example/list'));
 assert(b.html.includes('077-226-2271') && b.html.includes(ctx.unsubscribeUrl));
 assert(b.preheader.length > 0 && b.html.includes(M.STYLES.night.bg));

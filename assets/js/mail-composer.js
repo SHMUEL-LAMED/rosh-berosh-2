@@ -204,6 +204,7 @@
       if (!M.own(M.STYLES, o.style)) o.style = 'night';
       if (!M.own(M.FONT_SETS, o.font)) o.font = 'modern';
       if (!M.own(M.SHAPES, o.shape)) o.shape = 'pill';
+      if (!['head', 'full', 'none'].includes(o.cover)) o.cover = 'head';   // "ליד הכותרת" מגרסה קודמת → בכותרת
       // העבודה שנשמרה על המייל הזה (אם סגרו באמצע)
       const w = obj(work()[keyFor(kind, e?.id)]);
       st.restored = 0;
@@ -425,7 +426,7 @@
 
 <section class="mc-sec">
   <h3 class="mc-h">תמונה</h3>
-  <div class="segmented" role="group" aria-label="מיקום התמונה">${[['side', 'ליד הכותרת'], ['full', 'גדולה למעלה'], ['none', 'בלי תמונה']].map(([k, t]) => `<button type="button" data-mcover="${k}" aria-pressed="${(canImg ? o.cover : 'none') === k}" ${canImg || k === 'none' ? '' : 'disabled'}>${t}</button>`).join('')}</div>
+  <div class="segmented" role="group" aria-label="מיקום התמונה">${[['head', 'בכותרת'], ['full', 'גדולה לכל הרוחב'], ['none', 'בלי תמונה']].map(([k, t]) => `<button type="button" data-mcover="${k}" aria-pressed="${(canImg ? o.cover : 'none') === k}" ${canImg || k === 'none' ? '' : 'disabled'}>${t}</button>`).join('')}</div>
   <label class="field"><span>תמונה משלכם (קישור https, לא חובה)</span><input data-m="image" value="${esc(o.image)}" class="ltr" type="url" placeholder="https://…/banner.jpg" autocomplete="off"><small>${st.kind === 'episode' ? (hasCover ? 'במקום התמונה של התוכנית.' : 'לתוכנית הזו אין תמונה — אפשר לשים כאן קישור לתמונה.') : 'באנר או לוגו בראש המייל.'}</small></label>
 </section>
 
@@ -925,7 +926,7 @@
       if (k === 'image') {
         const ok = /^https:\/\/\S+$/i.test(t.value.trim());
         // קישור לתמונה כש"בלי תמונה" מסומן — מציגים אותה (בהודעה ובסיכום: באנר גדול למעלה)
-        if (ok && st.opts.cover === 'none') st.opts.cover = st.kind === 'episode' ? 'side' : 'full';
+        if (ok && st.opts.cover === 'none') st.opts.cover = st.kind === 'episode' ? 'head' : 'full';
         $$('[data-mcover]').forEach((x) => { x.disabled = x.dataset.mcover !== 'none' && !(ep()?.cover || ep()?.thumb) && !ok; x.setAttribute('aria-pressed', String(x.dataset.mcover === st.opts.cover)); });
       }
       save(); preview();

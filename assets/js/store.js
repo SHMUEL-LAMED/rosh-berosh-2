@@ -95,7 +95,49 @@
     const c = raw?.contacts && typeof raw.contacts === 'object' ? raw.contacts : {};
     const contacts = { ...CONTACT_DEFAULTS };
     for (const k of Object.keys(CONTACT_DEFAULTS)) if (typeof c[k] === 'string') contacts[k] = c[k].trim();
-    return { banner, updates, survey, contacts };
+    return { banner, updates, survey, contacts, polls: normPolls(raw?.polls) };
+  }
+
+  /* ---------- סקרים: אותם כללים כמו בשרת (worker/program-polls.ts), כדי שהטיוטה והתצוגה המקדימה
+     ייראו בדיוק כמו אחרי הפרסום. כאן לא מסננים — הניהול צריך גם טיוטות; הסינון בתצוגה (polls.js). */
+  const POLL_ENUM = { layout: ['list', 'grid', 'cards'], optionShape: ['circle', 'square', 'rounded'], optionSize: ['s', 'm', 'l'], imageShape: ['wide', 'square', 'circle'], results: ['after', 'always', 'closed', 'admin'] };
+  const POLL_DEFAULT = { layout: 'list', optionShape: 'circle', optionSize: 'm', imageShape: 'wide', results: 'after' };
+  const pollKey = (v) => String(v ?? '').trim().replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40);
+  const httpsUrl = (v) => { const u = String(v ?? '').trim().slice(0, 600); return /^https:\/\/[^\s"'<>]+$/.test(u) ? u : ''; };
+  const wall = (v) => { const t = String(v ?? '').trim(); return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(t) ? t.slice(0, 16) : /^\d{4}-\d{2}-\d{2}$/.test(t) ? `${t}T00:00` : ''; };
+  const newKey = (n = 10) => (crypto.randomUUID ? crypto.randomUUID().replace(/-/g, '') : Math.random().toString(36).slice(2) + Date.now().toString(36)).slice(0, n);
+  function normPoll(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const seen = new Set();
+    const options = (Array.isArray(raw.options) ? raw.options : []).slice(0, 40).map((o) => {
+      let id = pollKey(o?.id) || newKey(8);
+      while (seen.has(id)) id += 'x';
+      seen.add(id);
+      return { id, label: String(o?.label ?? '').slice(0, 120), sub: String(o?.sub ?? '').slice(0, 120), image: httpsUrl(o?.image) };
+    });
+    const show = raw.show && typeof raw.show === 'object' ? raw.show : {};
+    const multi = raw.multi === true;
+    const pickE = (k) => (POLL_ENUM[k].includes(raw[k]) ? raw[k] : POLL_DEFAULT[k]);
+    const hue = Math.round(Number(raw.hue));
+    const filled = options.filter((o) => o.label.trim());
+    return {
+      id: pollKey(raw.id) || newKey(12),
+      enabled: raw.enabled === true,
+      title: String(raw.title ?? '').slice(0, 120), question: String(raw.question ?? '').slice(0, 300), description: String(raw.description ?? '').slice(0, 1000),
+      image: httpsUrl(raw.image), imageShape: pickE('imageShape'), hue: Number.isFinite(hue) ? ((hue % 360) + 360) % 360 : 42,
+      layout: pickE('layout'), optionShape: pickE('optionShape'), optionSize: pickE('optionSize'),
+      multi, maxChoices: multi ? Math.max(1, Math.min(filled.length || 1, Math.round(Number(raw.maxChoices)) || filled.length || 1)) : 1,
+      allowChange: raw.allowChange !== false, results: pickE('results'),
+      from: wall(raw.from), until: wall(raw.until),
+      thanks: String(raw.thanks ?? '').slice(0, 200), buttonLabel: String(raw.buttonLabel ?? '').slice(0, 40),
+      show: { home: show.home === true, archive: show.archive === true, me: show.me === true, allEpisodes: show.allEpisodes === true, episodes: [...new Set((Array.isArray(show.episodes) ? show.episodes : []).map(String).filter(Boolean))].slice(0, 300) },
+      options,
+      createdAt: String(raw.createdAt || new Date().toISOString()).slice(0, 25),
+    };
+  }
+  function normPolls(raw) {
+    const seen = new Set();
+    return (Array.isArray(raw) ? raw : []).slice(0, 50).map(normPoll).filter((p) => p && !seen.has(p.id) && seen.add(p.id));
   }
   const CONTACT_DEFAULTS = {
     phone: '077-226-2271', phone2: '073-707-9536', email: 'rbr17011701@gmail.com',
@@ -307,6 +349,12 @@
       get: (id) => sb.call(`/api/program/versions/${encodeURIComponent(id)}`),
     },
     stats: () => sb.call('/api/program/stats'),
+    polls: {
+      /** מצב הסקרים: פתוח/סגור, מה בחרתי, ותוצאות (כשמותר לראות) */
+      status: (ids) => sb.call(`/api/program/polls?ids=${encodeURIComponent(ids.join(','))}`),
+      vote: (pollId, choices) => sb.call('/api/program/polls/vote', { method: 'POST', body: { pollId, choices } }),
+      reset: (pollId) => sb.call('/api/program/polls/reset', { method: 'POST', body: { pollId } }),
+    },
     messages: {
       list: () => sb.call('/api/program/messages'),
       send: (body) => sb.call('/api/program/messages', { method: 'POST', body }),
@@ -894,7 +942,7 @@
     },
     normalize,
     normEpisode,
-    normSettings,
+    normSettings, normPoll,
   };
 
   window.RoshStore = {

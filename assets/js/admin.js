@@ -424,6 +424,8 @@
   function render() {
     ({ programs: renderPrograms, site: renderSite, listeners: renderListeners, publish: renderPublish })[A.tab]();
   }
+  // הגשר לניהול הסקרים (admin-polls.js): הטיוטה, שמירה בה, וציור מחדש
+  window.RoshAdminBridge = { get data() { return A.data; }, touch, render, get cloud() { return CLOUD; } };
 
   /* ---------- עזרים משותפים ---------- */
 
@@ -775,6 +777,8 @@ ${sinceCard()}
     </div>
   </div>
 </details>
+
+${window.RoshPollAdmin?.episodeCard(e) || ''}
 
 ${aiCard(e)}
 
@@ -1573,6 +1577,8 @@ ${st.transcript != null ? `<details class="ai-transcript" open><summary>התמל
     const ct = A.data.settings.contacts || (A.data.settings.contacts = S.admin.normSettings({}).contacts);
     const ups = A.data.settings.updates || [];
     $('#panel').innerHTML = `
+${window.RoshPollAdmin?.siteCard() || ''}
+
 <div class="card">
   <div class="section-title"><div><p class="kicker">הודעה</p><h2>הודעה בראש האתר</h2></div><span class="toggle${b.enabled ? ' on' : ''}" aria-hidden="true">${!b.enabled ? 'כבויה' : b.from && b.from > S.todayIL() ? 'מתוזמנת' : 'מוצגת'}</span></div>
   <div class="card-body">
@@ -1626,6 +1632,7 @@ ${st.transcript != null ? `<details class="ai-transcript" open><summary>התמל
     </div>
   </div>
 </div>`;
+    window.RoshPollAdmin?.afterSite();
   }
   function renderUpdates(ups) {
     if (!ups.length) return '<div class="state" style="padding:20px"><p>עדיין אין עדכונים.</p></div>';

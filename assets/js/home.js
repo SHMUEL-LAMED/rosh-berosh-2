@@ -194,6 +194,34 @@
   U.mountSubscribe(Fo.querySelector('[data-subscribe-host]'));
 
   window.RoshPolls?.mount(document.getElementById('home-polls'), window.RoshPolls.forPlace('home'));
+
+  /* ---------- מה חדש: מופיע רק כשיש עדכון שעוד לא ראיתם ---------- */
+  function renderNews() {
+    const N = document.getElementById('whats-new'); if (!N) return;
+    const fresh = U.newUpdates();
+    if (!fresh.length) { N.hidden = true; N.innerHTML = ''; return; }
+    const shown = fresh.slice(0, 3);
+    N.hidden = false;
+    N.innerHTML = `
+<div class="news-card">
+  <div class="news-head"><span class="news-mark" aria-hidden="true">✦</span><div><p class="kicker">מה חדש</p><h2>${fresh.length === 1 ? 'עדכון חדש' : `${fresh.length} עדכונים חדשים`}</h2></div>
+    <button type="button" class="icon-btn" data-news-close aria-label="הבנתי, להסתיר">✕</button></div>
+  <div class="news-list">${shown.map((u) => `
+    <article class="news-item">
+      <time datetime="${esc(u.date)}">${esc(U.fmtDate(u.date) || '')}</time>
+      ${u.title ? `<h3>${esc(u.title)}</h3>` : ''}
+      ${u.text ? `<p>${esc(u.text.length > 220 ? `${u.text.slice(0, 220).trim()}…` : u.text)}</p>` : ''}
+      ${u.link ? `<a class="btn small" href="${esc(u.link)}" ${/^https?:/.test(u.link) ? 'target="_blank" rel="noopener"' : ''}>לפרטים <span>←</span></a>` : ''}
+    </article>`).join('')}</div>
+  <div class="news-foot"><a class="btn" href="updates.html" data-news-all>לכל העדכונים <span>←</span></a><button type="button" class="btn ghost" data-news-close>הבנתי</button></div>
+</div>`;
+    N.querySelectorAll('[data-news-close]').forEach((b) => b.addEventListener('click', () => {
+      U.markUpdatesSeen(fresh.map((u) => u.id));
+      N.classList.add('closing');
+      setTimeout(() => { N.classList.remove('closing'); renderNews(); }, U.reduceMotion() ? 0 : 280);
+    }));
+  }
+  renderNews();
   U.reveal();
 
   // מספרים רצים כשהלוח נכנס למסך

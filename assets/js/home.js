@@ -134,15 +134,11 @@
   /* ---------- מספרים ---------- */
   const St = document.getElementById('stats');
   const nShows = list.filter((e) => e.season !== 'sets' && e.season !== 'legacy').length;
-  const nLegacy = list.filter((e) => e.season === 'legacy').length;
-  const nAudio = list.filter((e) => e.stream).length;
   St.setAttribute('data-reveal', '');
   St.innerHTML = list.length ? `
 <div class="stats">
   <div class="stat"><b data-count="${nShows}">0</b><small>תוכניות ופרקי בונוס</small></div>
-  <div class="stat"><b data-count="${nLegacy}">0</b><small>הקלטות משוחזרות</small></div>
   <div class="stat"><b data-count="${sets.length}">0</b><small>סטים מיוחדים</small></div>
-  <div class="stat"><b data-count="${nAudio}">0</b><small>הקלטות להאזנה</small></div>
 </div>` : '';
 
   /* ---------- הקהילה: פרטי הקשר נערכים בניהול ---------- */

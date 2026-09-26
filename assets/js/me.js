@@ -33,7 +33,7 @@
     <h1>שלום, מאזין.</h1>
     <p class="desc">${S.sb.configured ? 'התחברו עם Google, והאזור האישי יישמר בחשבון שלכם: איפה עצרתם, התור, "לאחר כך", ההיסטוריה וההעדפות — זהה בטלפון ובמחשב. בלי התחברות שום דבר לא נשמר, ומה שעשיתם בביקור הזה יתווסף לחשבון ברגע שתתחברו.' : 'ההתחברות אינה מוגדרת באתר הזה, ולכן שום דבר אישי לא נשמר.'}</p>
     <div class="actions">${S.sb.configured ? '<div class="google-slot" data-google></div>' : ''}<a class="btn" href="archive.html">לארכיון</a></div>
-    ${S.sb.configured ? '<p class="cue-hint" style="margin-top:10px;font-size:12px;color:var(--muted);font-weight:700"><a href="#" data-login>בעיה עם הכפתור? כניסה דרך אתר הסקר</a></p>' : ''}
+    ${S.sb.configured ? '<p class="cue-hint" style="margin-top:10px;font-size:12px;color:var(--muted);font-weight:700"><a href="#" data-login>בעיה עם הכפתור? כניסה בחלון נפרד</a></p>' : ''}
   </div>
 </div>`;
       if (S.sb.configured) S.sb.google(P.querySelector('[data-google]'), { onDone: (who) => { renderAll(); U.notify(`שלום, ${firstName(who) || 'מאזין'}. התחברתם.`, 'success'); }, onError: (err) => U.notify(`ההתחברות לא הצליחה: ${err.message}`, 'error') })

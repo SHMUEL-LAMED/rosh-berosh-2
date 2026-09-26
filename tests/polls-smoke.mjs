@@ -138,6 +138,7 @@ await page.click('#ep-polls [data-opt] >> nth=1');
 await page.click('#ep-polls [data-poll-vote]');
 await page.waitForSelector('#ep-polls .poll-login');
 check(true, 'מי שלא מחובר מתבקש להתחבר, והבחירה נשמרת');
+check(!(await page.locator('body').innerText()).includes('אתר הסקר'), 'שום אזכור של כניסה דרך אתר הסקר');
 const other = catalog.episodes.find((e) => e.id !== ep.id);
 await page.goto(`${BASE}/episode.html?ep=${encodeURIComponent(other.slug)}`);
 await page.waitForSelector('#episode .ep-album');

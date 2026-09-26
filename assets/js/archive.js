@@ -54,8 +54,6 @@
     document.getElementById('filters').innerHTML = `
 <button type="button" class="chip" data-season="" aria-pressed="${!state.season}">כל העונות</button>
 ${seasons.filter((s) => s.count).map((s) => `<button type="button" class="chip" data-season="${esc(s.id)}" style="${U.seasonVars(s.id)}" aria-pressed="${state.season === s.id}">${esc(s.title)} <span style="opacity:.6">${s.count}</span></button>`).join('')}
-<button type="button" class="chip" data-audio aria-pressed="${state.audio}">עם הקלטה</button>
-<button type="button" class="chip" data-filter-later aria-pressed="${state.later}">לאחר כך</button>
 <span class="spacer"></span>
 <label class="visually-hidden" for="sort">מיון</label>
 <select id="sort" class="input" style="width:auto;min-height:36px;padding-block:6px;border-radius:99px;font-size:12px;font-weight:800">
@@ -167,8 +165,6 @@ ${seasons.filter((s) => s.count).map((s) => `<button type="button" class="chip" 
   document.addEventListener('click', (e) => {
     const s = e.target.closest('[data-season]');
     if (s) { state.season = s.dataset.season; renderFilters(); render(); return; }
-    if (e.target.closest('[data-audio]')) { state.audio = !state.audio; renderFilters(); render(); return; }
-    if (e.target.closest('[data-filter-later]')) { state.later = !state.later; renderFilters(); render(); return; }
     const sug = e.target.closest('[data-suggest]');
     if (sug) { qEl.value = state.q = sug.dataset.suggest; render(); return; }
     const v = e.target.closest('[data-view]');

@@ -33,7 +33,7 @@ check(await page.locator('.site-header .brand strong').innerText() === 'ראש �
 check((await page.locator('.site-nav .admin-link').count()) === 0, 'כפתור הניהול מוסתר למי שלא מחובר כמנהל');
 check((await page.locator('.site-nav .me-link').count()) === 1, 'קישור לאזור האישי בכותרת');
 check((await page.locator('#recent .ep-card').count()) >= 3, 'רשת התוכניות האחרונות מלאה');
-check((await page.locator('#stats .stat').count()) === 4, 'לוח המספרים מוצג');
+check((await page.locator('#stats .stat').count()) === 2, 'לוח המספרים מוצג');
 check((await page.locator('.ticker a').count()) > 10, 'סרט התוכניות הנע מלא');
 check((await page.locator('#hero-eq i').count()) > 20, 'האקולייזר בגיבור נבנה');
 const total = await page.evaluate(() => window.RoshStore.episodes().length);

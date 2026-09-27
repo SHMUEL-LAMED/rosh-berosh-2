@@ -19,7 +19,7 @@
      הכתובת הזו מעבירה לשם (עם אותו חשבון, בלי כניסה נוספת), ל"אתר התוכניות"
      בתפריט הצד. ?standalone=1 משאיר את הדף כאן — לבדיקות ולמקרה חירום. */
   if (S.state.source === 'cloudflare' && !EMBED && !new URLSearchParams(location.search).has('standalone')) {
-    const part = `#prog-${['programs', 'site', 'listeners', 'publish'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'programs'}`;
+    const part = `#prog-${['programs', 'ads', 'site', 'listeners', 'publish'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'programs'}`;
     const shared = `${new URL(S.sb.cfg.apiBase).origin}/admin`;
     $('#admin-gate-text').textContent = 'עוברים לדף הניהול…';
     let target = `${shared}${part}`;
@@ -32,7 +32,7 @@
   paintHeader();
   $('#site-footer').innerHTML = EMBED ? '' : U.footer(site);
 
-  const TABS = ['programs', 'site', 'listeners', 'publish'];
+  const TABS = ['programs', 'ads', 'site', 'listeners', 'publish'];
   const CLOUD = S.state.source === 'cloudflare';
   const A = {
     data: clone(S.data),   // הטיוטה שעובדים עליה
@@ -68,6 +68,7 @@
     mailAfter: S.prefs.get('mailAfterPublish', true),   // לפתוח טיוטת מייל לרשימת התפוצה אחרי פרסום של תוכנית חדשה
     pushCount: null, epStats: new Map(), statsEp: '',
     ai: new Map(),         // מצב התמלול והסיכום לכל תוכנית
+    ads: { episodeId: '', suggestions: null, ranges: [], loading: false, busy: false, error: '' },
   };
   /* שום טיוטה לא נשמרת במכשיר — רק בשרת, לפי החשבון. מה שנשאר בדפדפן מגרסאות קודמות נמחק. */
   const DEVICE_DRAFT_KEYS = ['rosh:override', 'rosh:override-at', 'rosh:override-base'];
@@ -416,13 +417,65 @@
     // בדף המשותף: מעבר פנימי (למשל "פתיחה" מבדיקת התקינות) מסמן גם את תפריט הצד
     if (EMBED && push && CLOUD) { try { window.parent.postMessage({ type: 'rosh-admin-tab-changed', tab }, new URL(S.sb.cfg.apiBase).origin); } catch { /* */ } }
     render();
+    if (tab === 'ads' && !A.ads.suggestions && !A.ads.loading && CLOUD) scanAds();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
   window.addEventListener('hashchange', () => setTab(location.hash.slice(1) || 'programs', { push: false }));
   $('#admin-tabs').addEventListener('click', (e) => { const a = e.target.closest('[data-tab]'); if (!a) return; e.preventDefault(); setTab(a.dataset.tab); });
 
   function render() {
-    ({ programs: renderPrograms, site: renderSite, listeners: renderListeners, publish: renderPublish })[A.tab]();
+    ({ programs: renderPrograms, ads: renderAds, site: renderSite, listeners: renderListeners, publish: renderPublish })[A.tab]();
+  }
+
+  function renderAds() {
+    const ad = A.ads;
+    const episodes = A.data.episodes.filter((item) => U.streamUrl(item)).sort((a, b) => Number(b.number || 0) - Number(a.number || 0));
+    const chosen = episodes.find((item) => item.id === ad.episodeId);
+    const matches = (ad.suggestions || []).filter((item) => item.episodeId === ad.episodeId);
+    P.innerHTML = `<div class="card"><div class="section-title"><div><p class="kicker">בדיקת הקלטות</p><h2>ניקוי פרסומות</h2></div></div>
+      <div class="card-body"><p class="help">קטעים שהתמלול רומז עליהם מסומנים לבדיקה. הזמנים הם הערכה בלבד: האזינו, תקנו את ההתחלה והסוף, וסמנו רק קטעים שבדקתם. אפשר להוסיף קטע ידנית. הקובץ המקורי נשמר.</p>
+      <div class="actions"><button type="button" class="btn gold" data-op="ads-scan" ${ad.loading ? 'disabled' : ''}>${ad.loading ? 'מחפשים…' : 'סריקת התמלולים'}</button><span>${ad.suggestions ? `${ad.suggestions.length} קטעים חשודים בתמלולים` : 'טרם נסרק'}</span></div>
+      ${ad.error ? `<p class="problems" role="alert">${esc(ad.error)}</p>` : ''}
+      <label class="field"><span>תוכנית לבדיקה</span><select id="ads-episode"><option value="">בחרו תוכנית</option>${episodes.map((item) => `<option value="${esc(item.id)}" ${item.id === ad.episodeId ? 'selected' : ''}>${esc(label(item))} · ${(ad.suggestions || []).filter((x) => x.episodeId === item.id).length} חשודים</option>`).join('')}</select></label>
+      ${chosen ? `<audio controls preload="metadata" class="audio-preview" id="ads-audio" src="${esc(U.streamUrl(chosen))}"></audio>
+      <p class="help">לחיצה על ״האזנה״ קופצת לסביבת הקטע. גבולות החיתוך נקבעים בשניות; הכפתורים ״התחלה עכשיו״ ו״סוף עכשיו״ לוקחים את הזמן מהנגן.</p>
+      <div class="actions"><button type="button" class="btn small" data-op="ads-add">+ הוספת קטע ידנית</button></div>
+      ${ad.ranges.map((range, i) => `<div class="ai-result ad-range" data-range="${i}"><label><input type="checkbox" data-ad-check="${i}" ${range.checked ? 'checked' : ''}> להסיר את הקטע הזה</label>
+        <p>${esc(range.text || 'קטע שסומן ידנית')}</p><div class="actions"><button type="button" class="btn small" data-op="ads-play" data-i="${i}">▶ האזנה</button>
+        <label>התחלה <input type="number" min="0" step="0.1" data-ad-start="${i}" value="${range.start}" class="ltr" style="width:95px"></label><button type="button" class="btn small" data-op="ads-mark-start" data-i="${i}">התחלה עכשיו</button>
+        <label>סוף <input type="number" min="0" step="0.1" data-ad-end="${i}" value="${range.end}" class="ltr" style="width:95px"></label><button type="button" class="btn small" data-op="ads-mark-end" data-i="${i}">סוף עכשיו</button>
+        <button type="button" class="btn small" data-op="ads-remove" data-i="${i}">הסרה מהרשימה</button></div></div>`).join('')}
+      ${!ad.ranges.length ? `<p class="help">${matches.length ? 'נמצאו הצעות. לחצו ״סריקת התמלולים״ כדי לטעון אותן מחדש.' : 'לא סומנו קטעים בתוכנית זו. אפשר להוסיף אחד בזמן ההאזנה.'}</p>` : ''}
+      <div class="actions"><button type="button" class="btn primary" data-op="ads-cut" ${ad.busy || !ad.ranges.some((r) => r.checked) ? 'disabled' : ''}>${ad.busy ? 'מכינים הקלטה נקייה…' : 'אישור חיתוך הקטעים המסומנים'}</button></div>
+      <p class="help">חיתוך הקובץ ופרסום הגרסה החדשה עשויים לקחת כמה דקות. אל תסגרו את הדף עד לקבלת אישור.</p>` : ''}</div></div>`;
+  }
+  async function scanAds() {
+    A.ads.loading = true; A.ads.error = ''; renderAds();
+    try {
+      const result = await S.sb.call('/api/program/ai/ad-candidates');
+      A.ads.suggestions = result.suggestions || [];
+      if (A.ads.episodeId) A.ads.ranges = A.ads.suggestions.filter((x) => x.episodeId === A.ads.episodeId).map((x) => ({ ...x, checked: false }));
+    } catch (err) { A.ads.error = err.message; }
+    finally { A.ads.loading = false; if (A.tab === 'ads') renderAds(); }
+  }
+  async function cutAds() {
+    const ad = A.ads, episode = liveEp(ad.episodeId), audio = $('#ads-audio');
+    if (!episode || !audio || !Number.isFinite(audio.duration)) { U.notify('חכו עד שאורך ההקלטה ייטען בנגן.', 'error'); return; }
+    const cuts = ad.ranges.filter((r) => r.checked).map(({ start, end }) => ({ start: Number(start), end: Number(end) })).sort((a, b) => a.start - b.start);
+    if (!cuts.length || cuts.some((r, i) => !Number.isFinite(r.start) || !Number.isFinite(r.end) || r.start < 0 || r.end - r.start < .2 || r.end > audio.duration + 2 || i && r.start < cuts[i - 1].end)) {
+      U.notify('תקנו את זמני הקטעים: התחלה לפני הסוף, בלי חפיפה ובתחומי התוכנית.', 'error'); return;
+    }
+    if (!confirm(`לחתוך ${cuts.length} קטעים מהתוכנית ״${label(episode)}״ ולפרסם הקלטה נקייה? ההקלטה המקורית תישמר.`)) return;
+    ad.busy = true; ad.error = ''; renderAds();
+    try {
+      const result = await S.sb.call('/api/program/audio/cut', { method: 'POST', body: { episodeId: episode.id, sourceKey: episode.r2Key, duration: audio.duration, cuts } });
+      episode.audio = result.url; episode.r2Key = result.key; episode.audioSource = 'r2'; episode.duration = Math.round(result.duration);
+      touch();
+      ad.ranges = []; ad.suggestions = (ad.suggestions || []).filter((x) => x.episodeId !== episode.id);
+      await publishOne(episode);
+      U.notify('הקובץ הנקי הוכן. אם הפרסום נכשל, השינוי שמור בטיוטה ויש לפרסם אותה.', 'success');
+    } catch (err) { ad.error = err.message; U.notify(err.message, 'error'); }
+    finally { ad.busy = false; if (A.tab === 'ads') renderAds(); }
   }
   // הגשר לניהול הסקרים (admin-polls.js): הטיוטה, שמירה בה, וציור מחדש
   window.RoshAdminBridge = { get data() { return A.data; }, touch, render, get cloud() { return CLOUD; } };
@@ -2315,6 +2368,12 @@ ${proofCard()}
 
   P.addEventListener('input', (ev) => {
     const t = ev.target;
+    if (t.dataset.adStart != null || t.dataset.adEnd != null) {
+      const field = t.dataset.adStart != null ? 'start' : 'end';
+      const index = Number(t.dataset.adStart ?? t.dataset.adEnd);
+      if (A.ads.ranges[index]) A.ads.ranges[index][field] = Number(t.value);
+      return;
+    }
     if (t.id === 'ep-q') { A.q = t.value; renderList(); return; }
     const e = cur();
     const { f, lf, sf, uf, zf } = t.dataset;
@@ -2350,6 +2409,8 @@ ${proofCard()}
 
   P.addEventListener('change', async (ev) => {
     const t = ev.target;
+    if (t.id === 'ads-episode') { A.ads.episodeId = t.value; A.ads.ranges = (A.ads.suggestions || []).filter((x) => x.episodeId === t.value).map((x) => ({ ...x, checked: false })); renderAds(); return; }
+    if (t.dataset.adCheck != null) { const range = A.ads.ranges[Number(t.dataset.adCheck)]; if (range) range.checked = t.checked; P.querySelector('[data-op="ads-cut"]').disabled = !A.ads.ranges.some((x) => x.checked); return; }
     if (t.id === 'ep-filter') { A.filter = t.value; renderList(); return; }
     if (t.id === 'pub-notify') { A.notify = t.checked; return; }
     if (t.id === 'pub-mail') { A.mailAfter = t.checked; S.prefs.set('mailAfterPublish', t.checked); return; }
@@ -2469,6 +2530,12 @@ ${proofCard()}
       case 'mail': if (e) openMail(e.id); break;
       case 'share': if (e) openShare(e); break;
       case 'publish-one': if (e) publishOne(e, b); break;
+      case 'ads-scan': scanAds(); break;
+      case 'ads-add': { const now = Math.floor($('#ads-audio')?.currentTime || 0); A.ads.ranges.push({ start: now, end: now + 15, text: 'קטע שסומן ידנית', checked: false }); renderAds(); break; }
+      case 'ads-play': { const audio = $('#ads-audio'); if (audio) { audio.currentTime = Math.max(0, Number(A.ads.ranges[Number(b.dataset.i)]?.start || 0) - 5); audio.play().catch(() => {}); } break; }
+      case 'ads-mark-start': case 'ads-mark-end': { const i = Number(b.dataset.i), audio = $('#ads-audio'); if (A.ads.ranges[i] && audio) { const field = op === 'ads-mark-start' ? 'start' : 'end'; A.ads.ranges[i][field] = Math.round(audio.currentTime * 10) / 10; P.querySelector(`[data-ad-${field}="${i}"]`).value = A.ads.ranges[i][field]; } break; }
+      case 'ads-remove': A.ads.ranges.splice(Number(b.dataset.i), 1); renderAds(); break;
+      case 'ads-cut': cutAds(); break;
       case 'live': A.live = !A.live; renderEditor(); if (A.live) $('#live-pane')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); break;
       case 'live-size': A.liveSize = b.dataset.size; $$('[data-op="live-size"]').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); fitLive(); break;
       case 'hear-at': { const au = $('#preview-audio'); if (au) { au.currentTime = Number(b.dataset.t) || 0; au.play().catch(() => {}); au.scrollIntoView({ block: 'center', behavior: 'smooth' }); } break; }

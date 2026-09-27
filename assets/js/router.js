@@ -16,8 +16,8 @@
   'use strict';
 
   // הנתיב יחסית לשורש האתר: "", index.html, archive.html… או episodes/<slug>.html
-  const PAGES = /^(?:(?:index|archive|episode|me|updates|negishut)\.html)?$|^episodes\/[^/]+\.html$/;
-  const PAGE_SCRIPT = /assets\/js\/(home|archive|episode|me|updates|negishut)\.js(?:\?|$)/;
+  const PAGES = /^(?:(?:index|archive|episode|me|updates|negishut|guest)\.html)?$|^episodes\/[^/]+\.html$/;
+  const PAGE_SCRIPT = /assets\/js\/(home|archive|episode|me|updates|negishut|guest)\.js(?:\?|$)/;
   let controller = new AbortController();
   let navigating = 0;
 

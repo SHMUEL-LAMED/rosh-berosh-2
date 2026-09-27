@@ -95,8 +95,43 @@
     const c = raw?.contacts && typeof raw.contacts === 'object' ? raw.contacts : {};
     const contacts = { ...CONTACT_DEFAULTS };
     for (const k of Object.keys(CONTACT_DEFAULTS)) if (typeof c[k] === 'string') contacts[k] = c[k].trim();
-    return { banner, updates, survey, contacts, polls: normPolls(raw?.polls) };
+    return { banner, updates, survey, contacts, polls: normPolls(raw?.polls), guests: normGuests(raw?.guests) };
   }
+
+  /* ---------- אורחים: הפרופיל שנכתב בניהול (תמונה, שורת תפקיד, כמה מילים וקישורים).
+     האורח מזוהה לפי השם כפי שהוא מופיע בתוכניות — אותו מפתח (guestKey) גם כשהשם
+     נכתב עם רווחים או ניקוד אחרים. אותם כללים כמו בשרת (normalizeGuests). */
+  const guestKey = (name) => String(name || '').replace(/[\u0591-\u05C7]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+  function normGuests(raw) {
+    const seen = new Set();
+    return (Array.isArray(raw) ? raw : []).flatMap((g) => {
+      const name = String(g?.name || '').replace(/\s+/g, ' ').trim(), key = guestKey(name);
+      if (!key || seen.has(key)) return [];
+      seen.add(key);
+      const links = (Array.isArray(g?.links) ? g.links : []).map((l) => ({ label: String(l?.label || '').trim(), url: String(l?.url || '').trim() })).filter((l) => /^https?:\/\//i.test(l.url));
+      return [{ key, name, role: String(g?.role || '').trim(), bio: String(g?.bio || '').trim(), photo: /^https:\/\//i.test(String(g?.photo || '')) ? String(g.photo).trim() : '', links }];
+    });
+  }
+  /** כל האורחים באתר: מי שמופיע בתוכניות הציבוריות (עם הפרופיל שלו, אם נכתב), מהרבות למעטות.
+      השם המוצג הוא השם מהפרופיל, או הכתיב הנפוץ ביותר בתוכניות. אורח בלי אף תוכנית ציבורית לא מוצג. */
+  function guests() {
+    const profiles = new Map((state.data.settings?.guests || []).map((p) => [p.key, p]));
+    const m = new Map();
+    for (const e of episodes()) for (const raw of e.guests) {
+      const key = guestKey(raw); if (!key) continue;
+      const name = raw.replace(/\s+/g, ' ').trim();
+      const g = m.get(key) || { key, spellings: new Map(), episodes: [] };
+      g.spellings.set(name, (g.spellings.get(name) || 0) + 1);
+      if (!g.episodes.includes(e)) g.episodes.push(e);
+      m.set(key, g);
+    }
+    return [...m.values()].map((g) => {
+      const profile = profiles.get(g.key) || null;
+      const name = profile?.name || [...g.spellings].sort((a, b) => b[1] - a[1])[0][0];
+      return { key: g.key, name, profile, episodes: g.episodes, count: g.episodes.length };
+    }).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'he'));
+  }
+  function guest(name) { const key = guestKey(name); return key ? guests().find((g) => g.key === key) || null : null; }
 
   /* ---------- סקרים: אותם כללים כמו בשרת (worker/program-polls.ts), כדי שהטיוטה והתצוגה המקדימה
      ייראו בדיוק כמו אחרי הפרסום. כאן לא מסננים — הניהול צריך גם טיוטות; הסינון בתצוגה (polls.js). */
@@ -942,12 +977,12 @@
     },
     normalize,
     normEpisode,
-    normSettings, normPoll,
+    normSettings, normPoll, normGuests,
   };
 
   window.RoshStore = {
     state, ready, load, sb, prefs, positions, last, later, history, queue, listening, likes, moments, me, admin,
-    episodes, seasons, bySlug, byId, latest, featured, neighbors, searchEpisodes, suggest,
+    episodes, seasons, bySlug, byId, latest, featured, neighbors, searchEpisodes, suggest, guests, guest, guestKey,
     bannerActive, scheduled, nowIL, todayIL, onSession, signedIn, signOut, forgetSession,
     get site() { return state.site; },
     get data() { return state.data; },

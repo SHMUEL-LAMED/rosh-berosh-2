@@ -505,8 +505,14 @@ check(await page.evaluate(() => document.body.classList.contains('admin-locked')
   await p3.goto(`${BASE}/episode.html?ep=${encodeURIComponent(slug)}`);
   await p3.waitForSelector('.guest-link');
   await p3.click('.guest-link >> text=שרה כהן');
+  await p3.waitForSelector('.guest-hero h1');
+  check((await p3.textContent('.guest-hero h1')) === 'שרה כהן' && (await p3.locator('.ep-grid .ep-card').count()) === 1, 'שם אורח בדף התוכנית מוביל לדף האורח, עם כל התוכניות שלו');
+  await p3.click('.grid-head a[href^="archive.html?guest="]');
   await p3.waitForFunction(() => document.querySelectorAll('#results .ep-card').length === 1);
-  check((await p3.inputValue('#guest')) === 'שרה כהן', 'שם אורח בדף התוכנית מוביל לכל התוכניות שלו');
+  check((await p3.inputValue('#guest')) === 'שרה כהן', 'מדף האורח לארכיון המסונן לפי האורח');
+  await p3.goto(`${BASE}/guest.html`);
+  await p3.waitForSelector('.guest-card');
+  check((await p3.locator('.guest-card b').allTextContents()).join('|') === 'דוד לוי|שרה כהן', 'דף כל האורחים — מהרבות למעטות, ואותו אורח גם עם רווח כפול');
   await p3.close();
   published = before;
 }

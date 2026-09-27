@@ -76,7 +76,8 @@ ${guests.length ? `<label class="visually-hidden" for="guest">אורח</label>
 <select id="guest" class="input guest-select${state.guest ? ' on' : ''}">
   <option value="">כל האורחים</option>
   ${guests.map((g) => `<option value="${esc(g.name)}" ${guestKey(state.guest) === g.key ? 'selected' : ''}>${esc(g.name)} (${g.count})</option>`).join('')}
-</select>` : ''}
+</select>
+<a class="chip" href="guest.html">דפי האורחים ←</a>` : ''}
 <span class="spacer"></span>
 <label class="visually-hidden" for="sort">מיון</label>
 <select id="sort" class="input" style="width:auto;min-height:36px;padding-block:6px;border-radius:99px;font-size:12px;font-weight:800">

@@ -114,7 +114,7 @@ function staticArticle(e, season) {
     fmtDate(e.date) ? `<time datetime="${esc(e.date)}">${esc(fmtWeekday(e.date))}, <span class="ep-nw">${esc(fmtDate(e.date))}</span></time>` : '',
     fmtHebDate(e.date) ? `<span>${esc(fmtHebDate(e.date))}</span>` : '',
     fmtDuration(e.duration) ? `<span>${esc(fmtDuration(e.duration))}</span>` : '',
-    guests.length ? `<span>עם ${esc(guests.join(', '))}</span>` : '',
+    guests.length ? `<span>עם ${guests.map((g) => `<a class="guest-link" href="guest.html?g=${encodeURIComponent(g)}">${esc(g)}</a>`).join(', ')}</span>` : '',
   ].filter(Boolean);
   const paras = paragraphs(e.description);
   return `

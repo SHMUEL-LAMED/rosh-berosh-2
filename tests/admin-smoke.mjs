@@ -117,7 +117,7 @@ await page.goto(`${BASE}/admin.html?standalone=1`);
 await page.waitForSelector('#panel .workspace', { timeout: 15000 });
 await page.evaluate(() => document.querySelector('#dlg-guide')?.close());
 check(!(await page.evaluate(() => document.body.classList.contains('admin-locked'))), 'מנהל מחובר רואה את הניהול');
-check((await page.locator('#admin-tabs a').count()) === 4, 'ארבעה חלקים בדיוק');
+check((await page.locator('#admin-tabs a').count()) === 5, 'חמש לשוניות ניהול, כולל ניקוי פרסומות');
 check((await page.locator('#ep-list .ep-item').count()) === 86, 'רשימת התוכניות מלאה');
 check(await noDeviceDraft(), 'טיוטה ישנה שנשארה במכשיר לא נטענת ונמחקת');
 check(await page.evaluate(() => !document.querySelector('#panel').hasAttribute('aria-live') && document.querySelector('#admin-status').getAttribute('aria-live') === 'polite'), 'aria-live רק על שורת המצב, לא על כל החלק');

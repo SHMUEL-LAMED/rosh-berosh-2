@@ -2,4 +2,4 @@ User-agent: *
 Allow: /
 Disallow: /admin.html
 Disallow: /me.html
-Sitemap: https://shmuel-lamed.github.io/rosh-berosh-2/sitemap.xml
+Sitemap: https://rosh-berosh.xn--4dbjbascrao3i.com/sitemap.xml

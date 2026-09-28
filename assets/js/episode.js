@@ -108,7 +108,10 @@
   <div class="ep-head">
     <p class="kicker">${kicker}</p>
     <h1${ep.title.length > 22 ? ' class="ep-title-long"' : ''}>${esc(ep.title)}</h1>
-    ${facts.length || ep.guests.length ? `<p class="ep-facts">${facts.join('<i aria-hidden="true">·</i>')}${ep.guests.length ? `${facts.length ? '<i aria-hidden="true">·</i>' : ''}<span>עם ${ep.guests.map((g) => `<a class="guest-link" href="guest.html?g=${encodeURIComponent(g)}" title="הדף של ${esc(g)} וכל התוכניות איתו">${esc(g)}</a>`).join(', ')}</span>` : ''}</p>` : ''}
+    ${facts.length ? `<p class="ep-facts">${facts.join('<i aria-hidden="true">·</i>')}</p>` : ''}
+    ${ep.hosts.length ? `<p class="ep-facts">מגישים: ${ep.hosts.map((h) => `<a class="guest-link" href="guest.html?host=${encodeURIComponent(h)}">${esc(h)}</a>`).join(', ')}</p>` : ''}
+    ${ep.guests.length ? `<p class="ep-facts">אורחים: ${ep.guests.map((g) => `<a class="guest-link" href="guest.html?g=${encodeURIComponent(g)}">${esc(g)}</a>`).join(', ')}</p>` : ''}
+    ${ep.panelists.length ? `<p class="ep-facts">חברי פאנל: ${ep.panelists.map((g) => `<a class="guest-link" href="guest.html?g=${encodeURIComponent(g)}">${esc(g)}</a>`).join(', ')}</p>` : ''}
   </div>
   <div class="ep-actionbar">
     ${stream ? `<button type="button" class="ep-play" data-play><span class="ep-play-disc" aria-hidden="true"><i></i></span><span class="ep-play-label">האזנה לתוכנית</span></button>` : '<span class="pill">אין עדיין הקלטה לתוכנית הזו</span>'}

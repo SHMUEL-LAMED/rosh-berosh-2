@@ -517,7 +517,7 @@ check(await page.evaluate(() => document.body.classList.contains('admin-locked')
   await p3.click('.site-nav a[href="guest.html"]');
   await p3.waitForSelector('.guest-card');
   // המגישים: עד שנשמרה רשימה בניהול — המגישים של "מאחורי המיקרופון", בראש הדף
-  check((await p3.locator('.hosts-section .host-card b').allTextContents()).join('|') === 'קובי בלום|ירמי סלייטר|מיכאל לוי|ארי וייזר|חיים וינר|דודי זינגר', 'בראש הדף: המגישים (כיום, ואחריהם לשעבר)');
+  check((await p3.locator('.hosts-section .host-card b').allTextContents()).join('|') === 'קובי בלום|ירמי סלייטר|מיכאל לוי|ארי וייזר|חיים וינר|שלמה גולדברג', 'בראש הדף: המגישים (כיום, ואחריהם לשעבר)');
   check((await p3.locator('.hosts-section .host-card.past').count()) === 4, 'מגיש לשעבר מסומן בנפרד');
   await p3.click('.host-card >> text=ירמי סלייטר');
   await p3.waitForSelector('.host-hero h1');

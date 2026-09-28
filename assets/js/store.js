@@ -161,7 +161,8 @@
     }
     // חבר מערכת מוכר שאין עדיין מקור לשייך אותו לפרק מסוים מקבל פרופיל,
     // בלי לייצר שיוך שגוי לתוכנית.
-    for (const [key, profile] of profiles) if (!m.has(key) && profile.role === 'חבר פאנל') {
+    const catalogKeys = new Set(state.data.episodes.flatMap((e) => [...e.guests, ...e.panelists]).map(guestKey).filter(Boolean));
+    for (const [key, profile] of profiles) if (!m.has(key) && !catalogKeys.has(key) && profile.role === 'חבר פאנל') {
       m.set(key, { key, spellings: new Map([[profile.name, 1]]), episodes: [], panelist: true });
     }
     return [...m.values()].map((g) => {

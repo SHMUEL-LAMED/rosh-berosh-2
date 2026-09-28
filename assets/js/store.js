@@ -118,7 +118,7 @@
      עד שנשמרה רשימה בניהול — המגישים שהופיעו תמיד בפסקה "מאחורי המיקרופון". */
   const DEFAULT_HOSTS = [
     { name: 'קובי בלום', role: 'מגיש', bio: '', photo: '', links: [], seasons: ['slater', 'levi', 'trio'], current: true },
-    { name: 'ירמי סלייטר', role: 'מגיש', bio: '', photo: '', links: [], seasons: ['slater', 'trio'], current: true },
+    { name: 'ירמי סלייטר', role: 'מגיש', bio: '', photo: 'https://rosh-berosh.smwlyqswkwt232.workers.dev/api/program/profile-photo/yermi-slater', links: [], seasons: ['slater', 'trio'], current: true },
     { name: 'מיכאל לוי', role: 'מייסד התוכנית', bio: '', photo: '', links: [], seasons: ['levi', 'trio'], current: false },
     { name: 'ארי וייזר', role: 'מגיש בגרסת השלישייה', bio: '', photo: '', links: [], seasons: ['trio'], current: false },
     { name: 'חיים וינר', role: 'מגיש בגרסת השלישייה', bio: '', photo: '', links: [], seasons: ['trio'], current: false },

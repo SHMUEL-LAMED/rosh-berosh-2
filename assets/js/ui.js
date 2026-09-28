@@ -239,7 +239,7 @@
     ${me}
     <button type="button" class="theme-toggle" data-theme-toggle aria-label="${themeLabel()}" title="${themeLabel()}"></button>
   </nav>
-</header>${banner()}${voteBar(active)}${previewBar()}`;
+</header>${banner()}${previewBar()}`;
   }
 
   /* ---------- מצב בהיר / כהה ותנועה (theme.js), נשמרים בהעדפות החשבון ---------- */
@@ -266,14 +266,6 @@
       notify(next === 'reduced' ? 'האנימציות הופסקו.' : 'האנימציות הופעלו.', 'success');
     }
   });
-
-  /** "הצביעו עכשיו": כשההצבעה במצעד פתוחה באתר הסקר */
-  function voteBar(active) {
-    const S = window.RoshStore;
-    const sv = S?.settings?.survey;
-    if (!sv?.open || !sv.url || active === 'admin') return '';
-    return `<div class="site-banner vote" role="status"><span class="site-banner-mark" aria-hidden="true">✓</span><p>ההצבעה במצעד פתוחה${sv.name ? ` — <b>${esc(sv.name)}</b>` : ''}</p><a class="btn small primary" href="${esc(sv.url)}" target="_blank" rel="noopener">הצביעו עכשיו <span>←</span></a></div>`;
-  }
 
   /** ההודעה בדף הבית (ובכל הדפים), אם מנהל הפעיל אותה ותאריך הסיום לא עבר */
   function banner() {

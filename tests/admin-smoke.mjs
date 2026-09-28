@@ -375,7 +375,7 @@ await page.evaluate(() => localStorage.removeItem('rosh:cf:session'));
 await page.goto(`${BASE}/index.html`);
 await page.waitForSelector('#featured .card');
 check((await page.locator('.site-banner:not(.vote)').count()) === 1 && (await page.locator('.site-banner:not(.vote)').innerText()).includes('חמישי'), 'ההודעה מופיעה בראש דף הבית');
-check((await page.locator('.site-banner.vote').count()) === 1, '"הצביעו עכשיו" כשההצבעה במצעד פתוחה');
+check((await page.locator('.site-banner.vote').count()) === 0, 'אין פס "ההצבעה במצעד פתוחה" בראש האתר');
 check((await page.locator('.site-nav a[href="updates.html"]').count()) === 1, 'קישור לעדכונים בתפריט');
 check((await page.locator('#whats-new .news-item').count()) === 1 && (await page.locator('#whats-new h3').innerText()) === 'עדכון ראשון', '"מה חדש" בדף הבית — כשיש עדכון שעוד לא ראו');
 check((await page.locator('.site-nav a.has-new .nav-new').innerText()) === '1', 'נקודה עם מספר העדכונים החדשים ליד "עדכונים" בתפריט');

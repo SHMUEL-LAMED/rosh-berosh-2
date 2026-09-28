@@ -2662,5 +2662,16 @@
       ],
       "sourceFileBytes": 74180205
     }
-  ]
+  ],
+  "settings": {
+    "guests": [
+      {
+        "name": "יוסי קאהן",
+        "role": "חבר פאנל",
+        "bio": "",
+        "photo": "",
+        "links": []
+      }
+    ]
+  }
 }

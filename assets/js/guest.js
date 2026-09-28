@@ -21,10 +21,10 @@
   const initials = (name) => name.split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]).join('');
   const avatar = (g, cls = '') => g.profile?.photo
     ? `<img class="guest-avatar ${cls}" src="${esc(g.profile.photo)}" alt="" loading="lazy" decoding="async">`
-    : `<span class="guest-avatar ${cls}" style="--h:${hueOf(g.key)}" aria-hidden="true">${esc(initials(g.name))}</span>`;
+    : `<img class="guest-avatar ${cls}" src="assets/img/anonymous-profile.svg" alt="" loading="lazy">`;
   const hostAvatar = (h, cls = '') => h.photo
     ? `<img class="guest-avatar ${cls}" src="${esc(h.photo)}" alt="" loading="lazy" decoding="async">`
-    : `<span class="guest-avatar ${cls}" style="--h:${hueOf(h.key)}" aria-hidden="true">${esc(initials(h.name))}</span>`;
+    : `<img class="guest-avatar ${cls}" src="assets/img/anonymous-profile.svg" alt="" loading="lazy">`;
   const years = (eps) => {
     const ys = eps.map((e) => Number(String(e.date || '').slice(0, 4))).filter(Boolean);
     if (!ys.length) return '';
@@ -53,7 +53,7 @@
 <article class="card guest-hero" style="--h:${hueOf(g.key)}" data-reveal>
   <div class="guest-hero-media">${avatar(g, 'xl')}</div>
   <div class="guest-hero-text">
-    <p class="kicker"><a href="guest.html">האורחים שלנו</a> · אורח בתוכנית</p>
+    <p class="kicker"><a href="guest.html">המגישים והאורחים</a> · ${g.panelist ? 'חבר פאנל' : 'אורח בתוכנית'}</p>
     <h1>${esc(g.name)}</h1>
     ${p.role ? `<p class="guest-role">${esc(p.role)}</p>` : ''}
     <p class="guest-facts">${facts.map(esc).join('<i aria-hidden="true">·</i>')}</p>
@@ -166,7 +166,7 @@ ${eps.length ? `<section class="grid-section">
     }
     box.innerHTML = `${hostsBlock}
 <section class="card">
-  <div class="section-title"><div><p class="kicker">מי היה אצלנו</p><${hostsBlock ? 'h2' : 'h1'} class="guests-title">האורחים</${hostsBlock ? 'h2' : 'h1'}></div><strong id="guest-count">${all.length}</strong></div>
+  <div class="section-title"><div><p class="kicker">מי היה אצלנו</p><${hostsBlock ? 'h2' : 'h1'} class="guests-title">האורחים וחברי הפאנל</${hostsBlock ? 'h2' : 'h1'}></div><strong id="guest-count">${all.length}</strong></div>
   <div class="card-body">
     <form class="search-box" role="search" id="guest-search"><span class="search-glyph" aria-hidden="true">♫</span><label for="guest-q" class="visually-hidden">חיפוש אורח</label><input id="guest-q" type="search" placeholder="חפשו אורח…" autocomplete="off"></form>
     <div class="guest-grid" id="guest-list"></div>
@@ -177,12 +177,16 @@ ${eps.length ? `<section class="grid-section">
       const k = S.guestKey(q.value);
       const shown = k ? all.filter((g) => g.key.includes(k) || (g.profile?.role || '').toLowerCase().includes(k)) : all;
       count.textContent = shown.length;
-      list.innerHTML = shown.length ? shown.map((g) => `
+      const card = (g) => `
 <a class="guest-card" href="guest.html?g=${encodeURIComponent(g.name)}" style="--h:${hueOf(g.key)}">
   ${avatar(g)}
   <b>${esc(g.name)}</b>
   <small>${g.profile?.role ? `${esc(g.profile.role)} · ` : ''}${plural(g.count)}</small>
-</a>`).join('') : `<div class="state"><span class="mark">?</span><h3>אין אורח שמתאים ל„${esc(q.value)}”</h3></div>`;
+</a>`;
+      list.innerHTML = shown.length ? [
+        ['אורחים', shown.filter((g) => !g.panelist)],
+        ['חברי פאנל', shown.filter((g) => g.panelist)],
+      ].filter(([, people]) => people.length).map(([heading, people]) => `<h3 class="guest-group-title">${heading}</h3>${people.map(card).join('')}`).join('') : `<div class="state"><span class="mark">?</span><h3>אין אדם שמתאים ל„${esc(q.value)}”</h3></div>`;
     };
     q.addEventListener('input', paint, { signal });
     box.querySelector('#guest-search').addEventListener('submit', (e) => e.preventDefault(), { signal });

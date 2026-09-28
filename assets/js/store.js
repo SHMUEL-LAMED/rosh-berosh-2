@@ -51,6 +51,8 @@
       audioMigratedAt: String(e.audioMigratedAt || ''),
       tags: Array.isArray(e.tags) ? e.tags.map(String).filter(Boolean) : [],
       guests: Array.isArray(e.guests) ? e.guests.map(String).filter(Boolean) : [],
+      hosts: Array.isArray(e.hosts) ? e.hosts.map(String).filter(Boolean) : [],
+      panelists: Array.isArray(e.panelists) ? e.panelists.map(String).filter(Boolean) : [],
       links: Array.isArray(e.links) ? e.links.filter((l) => l && l.url).map((l) => ({ label: String(l.label || l.url), url: String(l.url) })) : [],
       featured: !!e.featured,
       visible: e.visible !== false,
@@ -118,6 +120,9 @@
     { name: 'קובי בלום', role: 'מגיש', bio: '', photo: '', links: [], seasons: ['slater', 'levi', 'trio'], current: true },
     { name: 'ירמי סלייטר', role: 'מגיש', bio: '', photo: '', links: [], seasons: ['slater', 'trio'], current: true },
     { name: 'מיכאל לוי', role: 'מייסד התוכנית', bio: '', photo: '', links: [], seasons: ['levi', 'trio'], current: false },
+    { name: 'ארי וייזר', role: 'מגיש בגרסת השלישייה', bio: '', photo: '', links: [], seasons: ['trio'], current: false },
+    { name: 'חיים וינר', role: 'מגיש בגרסת השלישייה', bio: '', photo: '', links: [], seasons: ['trio'], current: false },
+    { name: 'דודי זינגר', role: 'מגיש אורח', bio: '', photo: '', links: [], seasons: [], current: false },
   ];
   function normHosts(raw) {
     if (!Array.isArray(raw)) return DEFAULT_HOSTS.map((h) => ({ ...h, links: [], seasons: [...h.seasons] }));
@@ -134,7 +139,7 @@
   function hosts() {
     const eps = episodes();
     return (state.data.settings?.hosts || []).map((h) => {
-      const own = eps.filter((e) => h.seasons.includes(e.season));
+      const own = eps.filter((e) => e.hosts.length ? e.hosts.some((name) => guestKey(name) === guestKey(h.name)) : h.seasons.includes(e.season));
       return { ...h, key: guestKey(h.name), episodes: own, count: own.length };
     });
   }
@@ -145,18 +150,19 @@
   function guests() {
     const profiles = new Map((state.data.settings?.guests || []).map((p) => [p.key, p]));
     const m = new Map();
-    for (const e of episodes()) for (const raw of e.guests) {
+    for (const e of episodes()) for (const raw of [...e.guests, ...e.panelists]) {
       const key = guestKey(raw); if (!key) continue;
       const name = raw.replace(/\s+/g, ' ').trim();
       const g = m.get(key) || { key, spellings: new Map(), episodes: [] };
       g.spellings.set(name, (g.spellings.get(name) || 0) + 1);
       if (!g.episodes.includes(e)) g.episodes.push(e);
+      if (e.panelists.some((p) => guestKey(p) === key)) g.panelist = true;
       m.set(key, g);
     }
     return [...m.values()].map((g) => {
       const profile = profiles.get(g.key) || null;
       const name = profile?.name || [...g.spellings].sort((a, b) => b[1] - a[1])[0][0];
-      return { key: g.key, name, profile, episodes: g.episodes, count: g.episodes.length };
+      return { key: g.key, name, profile, panelist: !!g.panelist, episodes: g.episodes, count: g.episodes.length };
     }).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'he'));
   }
   function guest(name) { const key = guestKey(name); return key ? guests().find((g) => g.key === key) || null : null; }

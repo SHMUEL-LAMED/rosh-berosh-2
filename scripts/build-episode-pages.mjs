@@ -110,11 +110,15 @@ function staticArticle(e, season) {
     tags.length ? `<div><dt>נושאים</dt><dd class="ep-tags">${tags.map((t) => `<a class="chip" href="archive.html?q=${encodeURIComponent(t)}">${esc(t)}</a>`).join('')}</dd></div>` : '',
   ].filter(Boolean);
   const guests = (Array.isArray(e.guests) ? e.guests : []).map(String).filter(Boolean);
+  const panelists = (Array.isArray(e.panelists) ? e.panelists : []).map(String).filter(Boolean);
+  const hosts = (Array.isArray(e.hosts) ? e.hosts : []).map(String).filter(Boolean);
   const facts = [
     fmtDate(e.date) ? `<time datetime="${esc(e.date)}">${esc(fmtWeekday(e.date))}, <span class="ep-nw">${esc(fmtDate(e.date))}</span></time>` : '',
     fmtHebDate(e.date) ? `<span>${esc(fmtHebDate(e.date))}</span>` : '',
     fmtDuration(e.duration) ? `<span>${esc(fmtDuration(e.duration))}</span>` : '',
-    guests.length ? `<span>עם ${guests.map((g) => `<a class="guest-link" href="guest.html?g=${encodeURIComponent(g)}">${esc(g)}</a>`).join(', ')}</span>` : '',
+    hosts.length ? `<span>מגישים: ${hosts.map((g) => `<a class="guest-link" href="guest.html?host=${encodeURIComponent(g)}">${esc(g)}</a>`).join(', ')}</span>` : '',
+    guests.length ? `<span>אורחים: ${guests.map((g) => `<a class="guest-link" href="guest.html?g=${encodeURIComponent(g)}">${esc(g)}</a>`).join(', ')}</span>` : '',
+    panelists.length ? `<span>חברי פאנל: ${panelists.map((g) => `<a class="guest-link" href="guest.html?g=${encodeURIComponent(g)}">${esc(g)}</a>`).join(', ')}</span>` : '',
   ].filter(Boolean);
   const paras = paragraphs(e.description);
   return `

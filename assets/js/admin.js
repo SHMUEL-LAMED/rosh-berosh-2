@@ -230,7 +230,7 @@
   }
 
   /** מה בדיוק ישתנה באתר: לכל תוכנית — אילו שדות, ומה היה לעומת מה יהיה */
-  const FIELD_NAMES = { title: 'השם', date: 'התאריך', number: 'המספר', season: 'העונה', description: 'התיאור', cover: 'התמונה', thumb: 'התמונה הקטנה', audio: 'ההקלטה', duration: 'האורך', visible: 'מוצגת באתר', featured: 'מומלצת בדף הבית', publishAt: 'מועד הפרסום', guests: 'האורחים', tags: 'מילות החיפוש', links: 'הקישורים', surveyId: 'המצעד המקושר' };
+  const FIELD_NAMES = { title: 'השם', date: 'התאריך', number: 'המספר', season: 'העונה', description: 'התיאור', cover: 'התמונה', thumb: 'התמונה הקטנה', audio: 'ההקלטה', duration: 'האורך', visible: 'מוצגת באתר', featured: 'מומלצת בדף הבית', publishAt: 'מועד הפרסום', hosts: 'המגישים', guests: 'האורחים', panelists: 'חברי הפאנל', tags: 'מילות החיפוש', links: 'הקישורים', surveyId: 'המצעד המקושר' };
   const detailedChanges = () => (A.origin ? diffData(A.origin, A.data) : []);
   /** ההבדלים בין שתי גרסאות של האתר (מה שמפורסם מול הטיוטה, או שתי גרסאות קודמות) */
   function diffData(fromRaw, toRaw) {
@@ -777,7 +777,9 @@ ${sinceCard()}
       <label class="field"><span>תאריך השידור</span><input data-f="date" type="date" value="${esc(e.date)}"></label>
       <label class="field"><span>מספר התוכנית</span><input data-f="number" type="number" inputmode="numeric" value="${e.number ?? ''}" placeholder="90"></label>
       <label class="field"><span>עונה</span><select data-f="season">${seasonOptions(e.season)}</select></label>
+      <label class="field"><span>מגישים בפרק</span><input data-f="hosts" value="${esc(e.hosts.join(', '))}" placeholder="שמות, מופרדים בפסיק"></label>
       <label class="field"><span>אורחים</span><input data-f="guests" value="${esc(e.guests.join(', '))}" placeholder="שמות, מופרדים בפסיק"></label>
+      <label class="field"><span>חברי פאנל</span><input data-f="panelists" value="${esc(e.panelists.join(', '))}" placeholder="שמות, מופרדים בפסיק"></label>
       ${CLOUD ? `<label class="field"><span>מקושרת למצעד (לא חובה)</span><select data-f="surveyId"><option value="">בלי מצעד</option>${(A.surveys || []).map((s) => `<option value="${esc(s.id)}" ${s.id === e.surveyId ? 'selected' : ''}>${esc(s.name)}${s.active ? ' · הפעיל' : ''}${s.open ? ' · ההצבעה פתוחה' : ''}</option>`).join('')}${e.surveyId && !(A.surveys || []).some((s) => s.id === e.surveyId) ? `<option value="${esc(e.surveyId)}" selected>מצעד שנמחק</option>` : ''}</select><small>דף התוכנית יציג קישור להצבעה כשהמצעד פתוח.</small></label>` : ''}
       <label class="field span2"><span>על התוכנית</span><textarea data-f="description" placeholder="כמה משפטים על מה שהיה בתוכנית. שורה ריקה פותחת פסקה חדשה.">${esc(e.description)}</textarea></label>
     </div>
@@ -864,7 +866,7 @@ ${epStatsCard(e)}
     const today = new Date().toISOString().slice(0, 10);
     const maxNum = A.data.episodes.reduce((m, e) => Math.max(m, e.number || 0), 0);
     const latestSeason = A.data.seasons.slice().sort((a, b) => (b.year || 0) - (a.year || 0))[0];
-    const e = { id: `ep-${Date.now().toString(36)}`, slug: '', number: maxNum + 1, season: latestSeason?.id || '', title: '', date: today, description: '', cover: '', audio: '', duration: 0, tags: [], guests: [], links: [], featured: false, visible: true, tracks: [], publishAt: '' };
+    const e = { id: `ep-${Date.now().toString(36)}`, slug: '', number: maxNum + 1, season: latestSeason?.id || '', title: '', date: today, description: '', cover: '', audio: '', duration: 0, tags: [], hosts: [], guests: [], panelists: [], links: [], featured: false, visible: true, tracks: [], publishAt: '' };
     e.slug = uniqueSlug(today, e.id);
     A.data.episodes.unshift(e);
     A.q = ''; A.filter = 'all'; A.bulk = false; A.picked.clear();
@@ -2383,6 +2385,8 @@ ${proofCard()}
         case 'number': e.number = v === '' ? null : Number(v); break;
         case 'tags': e.tags = splitList(v); break;
         case 'guests': e.guests = splitList(v); break;
+        case 'hosts': e.hosts = splitList(v); break;
+        case 'panelists': e.panelists = splitList(v); break;
         case 'season': if (v === '__new') { newSeasonInline(t); return; } e.season = v; break;
         case 'audio': e.audio = v; e.duration = 0; break;
         case 'cover': e.cover = v; e.thumb = ''; break;   // קישור חדש — הגרסה הקטנה הישנה כבר לא מתאימה

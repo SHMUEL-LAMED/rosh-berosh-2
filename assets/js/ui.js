@@ -212,8 +212,9 @@
       ['index.html', 'בית', 'home'],
       ['archive.html', 'הארכיון', 'archive'],
       ['index.html#sets', 'סטים', 'sets'],
-      // "עדכונים" בתפריט רק כשיש עדכון מהחודש האחרון (או כשכבר נמצאים בדף), ועם נקודה כשיש חדש
-      ...((S?.settings?.updates || []).some(recentUpdate) || active === 'updates' ? [['updates.html', 'עדכונים', 'updates']] : []),
+      // "עדכונים" כשיש עדכונים (עם נקודה כשיש חדש), "אורחים" כשיש תוכניות עם אורחים
+      ...((S?.settings?.updates || []).length || active === 'updates' ? [['updates.html', 'עדכונים', 'updates']] : []),
+      ...(active === 'guest' || (S?.episodes?.() || []).some((e) => e.guests?.length) ? [['guest.html', 'אורחים', 'guest']] : []),
       ['index.html#follow', 'הקהילה', 'community'],
     ].map(([href, label, key]) => {
       const fresh = key === 'updates' && active !== 'updates' ? newUpdates().length : 0;
@@ -298,7 +299,7 @@
   <div class="footer-mark" aria-hidden="true">${esc(site?.name || 'ראש בראש')}</div>
   <div class="footer-row">
     <span>${esc(site?.name || 'ראש בראש')} · ${esc(site?.tagline || 'מוזיקה ואקטואליה')}</span>
-    <nav aria-label="קישורים">${links}<a href="archive.html">הארכיון</a><a href="negishut.html">הצהרת נגישות</a><button type="button" class="chip" data-motion-toggle aria-pressed="${window.RoshTheme?.getMotion?.() === 'reduced'}">הפסקת אנימציות</button><button type="button" class="chip" data-kbd-help>קיצורי מקלדת</button></nav>
+    <nav aria-label="קישורים">${links}<a href="archive.html">הארכיון</a><a href="updates.html">עדכונים</a><a href="guest.html">האורחים</a><a href="negishut.html">הצהרת נגישות</a><button type="button" class="chip" data-motion-toggle aria-pressed="${window.RoshTheme?.getMotion?.() === 'reduced'}">הפסקת אנימציות</button><button type="button" class="chip" data-kbd-help>קיצורי מקלדת</button></nav>
   </div>
 </footer>`;
   }

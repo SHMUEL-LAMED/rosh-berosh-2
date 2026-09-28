@@ -510,7 +510,11 @@ check(await page.evaluate(() => document.body.classList.contains('admin-locked')
   await p3.click('.grid-head a[href^="archive.html?guest="]');
   await p3.waitForFunction(() => document.querySelectorAll('#results .ep-card').length === 1);
   check((await p3.inputValue('#guest')) === 'שרה כהן', 'מדף האורח לארכיון המסונן לפי האורח');
-  await p3.goto(`${BASE}/guest.html`);
+  await p3.goto(`${BASE}/index.html`);
+  await p3.waitForSelector('#featured .card');
+  check((await p3.locator('.site-nav a[href="guest.html"]').count()) === 1, 'כשיש אורחים: "אורחים" בתפריט');
+  check((await p3.locator('.site-footer a[href="guest.html"]').count()) === 1 && (await p3.locator('.site-footer a[href="updates.html"]').count()) === 1, 'בתחתית כל דף: קישורים לעדכונים ולאורחים');
+  await p3.click('.site-nav a[href="guest.html"]');
   await p3.waitForSelector('.guest-card');
   check((await p3.locator('.guest-card b').allTextContents()).join('|') === 'דוד לוי|שרה כהן', 'דף כל האורחים — מהרבות למעטות, ואותו אורח גם עם רווח כפול');
   await p3.close();

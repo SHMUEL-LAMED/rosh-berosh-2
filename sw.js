@@ -1,9 +1,10 @@
 /* Service Worker של ראש בראש: שומר את מעטפת האתר להפעלה מהירה ובלי רשת.
    נתוני התוכניות נטענים תמיד מהרשת קודם (ונופלים למטמון אם אין), וההקלטות
-   עצמן לא נשמרות. ניווט שנכשל ואין לו עותק שמור מקבל את offline.html.
+   עצמן לא נשמרות. עיצוב וסקריפטים עם חותמת גרסה (?v=) נטענים מהמכשיר מיד. ניווט שנכשל ואין לו עותק שמור מקבל את offline.html.
    הגופנים של Google נשמרים במטמון נפרד (שורד החלפת גרסה) כדי שהאתר ייראה נכון גם בלי רשת. */
-const VERSION = 'rosh-v20-novotebar';
+const VERSION = 'rosh-v21-fast';
 const FONTS = 'rosh-fonts-v1';
+const ASSETS = 'rosh-assets-v1';   // קבצים עם חותמת גרסה (שורד החלפת גרסה; כל קובץ נשמר בגרסה האחרונה בלבד)
 const OFFLINE = './offline.html';
 const SHELL = [
   './', './index.html', './archive.html', './episode.html', './me.html', './updates.html', './guest.html', './negishut.html', OFFLINE,
@@ -26,7 +27,7 @@ self.addEventListener('install', (e) => {
   })());
 });
 self.addEventListener('activate', (e) => {
-  e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== VERSION && k !== FONTS).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
+  e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== VERSION && k !== FONTS && k !== ASSETS).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
 });
 
 /* גיליון הגופנים: מהמטמון מיד, ומתרענן ברקע */
@@ -49,6 +50,22 @@ function cacheFirst(e, req) {
   });
 }
 
+/* קובץ עם חותמת גרסה: מהמטמון, ואם אין — מהרשת ונשמר. גרסאות קודמות של אותו קובץ נמחקות. */
+function stamped(e, req, url) {
+  return caches.open(ASSETS).then(async (c) => {
+    const cached = await c.match(req);
+    if (cached) return cached;
+    let r;
+    try { r = await fetch(req); }
+    catch { return (await caches.match(req, { ignoreSearch: true })) || Response.error(); }   // בלי רשת: העותק שבמעטפת
+    if (r.ok) e.waitUntil((async () => {
+      await c.put(req, r.clone());
+      for (const old of await c.keys()) { const u = new URL(old.url); if (u.pathname === url.pathname && u.search !== url.search) await c.delete(old); }
+    })());
+    return r;
+  });
+}
+
 self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET') return;
@@ -63,6 +80,9 @@ self.addEventListener('fetch', (e) => {
     e.respondWith(fetch(req).then((r) => { if (r.ok) { const copy = r.clone(); caches.open(VERSION).then((c) => c.put(req, copy)); } return r; }).catch(() => caches.match(req).then((hit) => hit || Response.error())));
     return;
   }
+  // עיצוב וסקריפטים עם חותמת גרסה (?v=<commit>, נוסף בכל פריסה): הכתובת משתנה בכל פריסה,
+  // ולכן הקובץ תחת אותה כתובת לעולם לא משתנה — מהמכשיר מיד, בלי לחכות לרשת
+  if (/\/assets\/(css|js)\/[^/]+\.(css|js)$/.test(url.pathname) && url.searchParams.has('v')) { e.respondWith(stamped(e, req, url)); return; }
   // קובצי האפליקציה: תמיד מאומתים מול הרשת כדי שפריסה חדשה לא תתערבב עם ישנה
   const navigate = req.mode === 'navigate';
   e.respondWith(fetch(req, { cache: 'no-cache' }).then((r) => {

@@ -1304,12 +1304,14 @@ ${s.moments?.top?.length ? `<p class="kicker" style="margin-top:14px">הרגעי
       גם אם היא הוחלפה בזמן ההעלאה */
   async function setCover(e, blob, progress = () => {}) {
     const name = `cover-${e.slug || e.id}`;
-    const cover = await window.RoshUpload(imageFile(blob, name), e.id, 'cover', progress);
-    let thumb = '';   // בלי גרסה קטנה — הכרטיס יציג את התמונה המלאה
-    try { thumb = await window.RoshUpload(new File([await makeThumb(blob)], `${name}-small.jpg`, { type: 'image/jpeg' }), e.id, 'cover', () => {}); } catch { /* */ }
+    // התמונה והגרסה הקטנה שלה עולות יחד, לא זו אחרי זו. בלי גרסה קטנה — הכרטיס יציג את התמונה המלאה
+    const [cover, thumb] = await Promise.all([
+      window.RoshUpload(imageFile(blob, name), e.id, 'cover', progress),
+      makeThumb(blob).then((small) => window.RoshUpload(new File([small], `${name}-small.jpg`, { type: 'image/jpeg' }), e.id, 'cover', () => {})).catch(() => ''),
+    ]);
     const live = liveEp(e.id);
     if (!live) throw new Error('התוכנית נמחקה בזמן ההעלאה.');
-    live.cover = cover; live.thumb = thumb;
+    live.cover = cover; live.thumb = thumb || '';
   }
   /** שורת המצב של העלאה בטופס — רק כשהתוכנית הזו פתוחה, ונמצאת מחדש בכל כתיבה (הטופס מצטייר מחדש) */
   function uploadStatus(e, kind, text) {
@@ -2443,7 +2445,8 @@ ${proofCard()}
   async function uploadFile(e, kind, file) {
     try {
       uploadStatus(e, kind, 'מתחילים להעלות…');
-      const progress = (pct) => uploadStatus(e, kind, `מעלים את ${file.name} — ${pct}%`);
+      // ההערה מגיעה כשההעלאה מנסה שוב אחרי ניתוק
+      const progress = (pct, note) => uploadStatus(e, kind, note ? `${note} ${pct}%` : `מעלים את ${file.name} — ${pct}%`);
       if (kind === 'cover') await setCover(e, file, progress);
       else {
         const url = await window.RoshUpload(file, e.id, kind, progress);

@@ -2,7 +2,7 @@
    נתוני התוכניות נטענים תמיד מהרשת קודם (ונופלים למטמון אם אין), וההקלטות
    עצמן לא נשמרות. ניווט שנכשל ואין לו עותק שמור מקבל את offline.html.
    הגופנים של Google נשמרים במטמון נפרד (שורד החלפת גרסה) כדי שהאתר ייראה נכון גם בלי רשת. */
-const VERSION = 'rosh-v19-guests';
+const VERSION = 'rosh-v20-novotebar';
 const FONTS = 'rosh-fonts-v1';
 const OFFLINE = './offline.html';
 const SHELL = [

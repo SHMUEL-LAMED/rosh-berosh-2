@@ -464,8 +464,10 @@
     async pull(auth = false, { timeout = 0 } = {}) {
       const c = timeout ? new AbortController() : null;
       const t = c ? setTimeout(() => c.abort(), timeout) : 0;
+      // בלי Content-Type (אין גוף): בקשה ציבורית "פשוטה", בלי בדיקת CORS מקדימה לפני הקטלוג
+      const headers = this.headers(auth); delete headers['Content-Type'];
       try {
-        const r = await fetch(this.base('/api/program/catalog'), { headers:this.headers(auth), cache:'no-store', signal:c?.signal });
+        const r = await fetch(this.base('/api/program/catalog'), { headers, cache:'no-store', signal:c?.signal });
         if (!r.ok) throw new Error(`Cloudflare: ${r.status}`);
         return await r.json();
       } finally { clearTimeout(t); }
@@ -526,9 +528,44 @@
   // כמה זמן הדף מחכה לקטלוג מהשרת לפני שהוא מציג את העותק השמור באתר
   const CATALOG_TIMEOUT = 8000;
 
+  /* ---------- טעינה מהירה ----------
+     1. הבקשות לנתוני האתר ולקטלוג יוצאות כבר מ־theme.js בראש הדף (window.RoshEarly) — במקביל
+        להורדת הסקריפטים. הקטלוג המוקדם משמש רק אם השרת שלו הוא השרת שב־site.json.
+     2. עותק של הקטלוג הציבורי האחרון נשמר במכשיר (מידע ציבורי בלבד — לא אישי). בביקור
+        הבא, אם השרת לא ענה תוך CACHE_WAIT, הדף מוצג מיד מהעותק, והקטלוג החדש מחליף אותו
+        ברקע (ולמעברים הבאים בין דפים). העותק לא משמש בתצוגה מקדימה, בניהול ובדף תוכנית
+        שאינה בעותק (תוכנית חדשה) — שם מחכים לשרת. */
+  const CATALOG_COPY = 'rosh:catalog';
+  const CACHE_WAIT = 400;
+  const COPY_MAX_AGE = 14 * 24 * 60 * 60 * 1000;
+  const early = window.RoshEarly || { site: null, catalog: null, api: '' };   // theme.js
+  /** הקטלוג מהשרת: הבקשה המוקדמת (פעם אחת, אם השרת תואם), אחרת בקשה חדשה */
+  function pullCatalog() {
+    const pending = early.catalog;
+    early.catalog = null;
+    let same = false; try { same = !!pending && new URL(sb.cfg.apiBase).origin === early.api; } catch { /* */ }
+    if (!same) return sb.pull(false, { timeout: CATALOG_TIMEOUT });
+    return Promise.race([pending, new Promise((_, reject) => setTimeout(() => { const e = new Error('timeout'); e.name = 'AbortError'; reject(e); }, CATALOG_TIMEOUT))]);
+  }
+  function readCopy() {
+    const copy = read(CATALOG_COPY, null);
+    if (!copy?.raw || !copy.at || Date.now() - copy.at > COPY_MAX_AGE || copy.api !== sb.cfg?.apiBase) return null;
+    return copy.raw;
+  }
+  function saveCopy(raw) {
+    // רק קטלוג ציבורי (מנהל מקבל גם תוכניות מוסתרות ומתוזמנות — אלה לא נשמרים במכשיר)
+    if (sb.user?.isAdmin || !Array.isArray(raw?.episodes) || !raw.episodes.length) return;
+    write(CATALOG_COPY, { at: Date.now(), api: sb.cfg?.apiBase, raw });
+  }
+  /** העותק מתאים לדף הזה? בדף תוכנית — רק אם התוכנית שבכתובת נמצאת בו */
+  function copyFits(raw) {
+    const slug = new URLSearchParams(location.search).get('ep') || document.body?.dataset.ep || '';
+    return !slug || raw.episodes.some((e) => e && (e.slug === slug || e.id === slug));
+  }
+
   async function load() {
     state.error = null;
-    try { state.site = await fetchJSON('data/site.json'); }
+    try { state.site = (await early.site?.catch(() => null)) || await fetchJSON('data/site.json'); }
     catch (e) { state.site = { name: 'ראש בראש', tagline: 'מוזיקה ואקטואליה', storage: { provider: 'json' } }; }
     state.source = state.site.storage?.provider === 'cloudflare' && sb.configured ? 'cloudflare' : 'json';
 
@@ -593,7 +630,29 @@
       catch (e) { state.error = e; state.preview = null; try { sessionStorage.removeItem(LS.preview); } catch { /* */ } state.data = normalize(await sb.pull(false, { timeout: CATALOG_TIMEOUT }).catch(() => ({}))); state.loadedFrom = state.source; }
     } else {
       try {
-        const raw = state.source === 'cloudflare' ? await sb.pull(false, { timeout: CATALOG_TIMEOUT }) : await fetchJSON('data/episodes.json');
+        let raw;
+        if (state.source === 'cloudflare') {
+          const fresh = pullCatalog();
+          fresh.catch(() => {});
+          const copy = sb.user?.isAdmin || state.embed ? null : readCopy();
+          raw = copy && copyFits(copy)
+            ? await Promise.race([fresh.catch(() => null), new Promise((r) => setTimeout(r, CACHE_WAIT))])
+            : await fresh;
+          if (raw) saveCopy(raw);
+          else {
+            // השרת איטי: מציגים עכשיו מהעותק, והקטלוג החדש נכנס כשהוא מגיע
+            raw = copy;
+            state.loadedFrom = 'copy';
+            state.fresh = fresh.then((next) => {
+              const remote = normalize(next);
+              if (remote.episodes.length) { state.data = remote; state.loadedFrom = 'cloudflare'; saveCopy(next); }
+            }).catch(() => {});
+            state.data = normalize(raw);
+            await personal;
+            readyResolve(state);
+            return state;
+          }
+        } else raw = await fetchJSON('data/episodes.json');
         const remote = normalize(raw);
         // חיבור חדש ל־D1 מחזיר קטלוג תקין אך ריק. במקרה כזה מציגים מיד את
         // הקטלוג המלא שנבנה מתיקיית הדרייב של התוכנית, במקום אתר ריק. מנהל

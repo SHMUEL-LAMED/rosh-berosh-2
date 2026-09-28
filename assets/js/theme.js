@@ -199,3 +199,22 @@
     onChange: onChange,
   };
 })();
+
+/* טעינה מהירה: הבקשות לנתוני האתר ולקטלוג הציבורי יוצאות כבר מכאן (הסקריפט הראשון בדף), במקביל
+   להורדת העיצוב והסקריפטים — במקום אחרי שכולם ירדו ורצו. store.js לוקח אותן מ־window.RoshEarly,
+   ומשתמש בקטלוג רק אם השרת כאן הוא השרת שב־site.json. לא בניהול, בתצוגה מקדימה ובחזרה מכניסה. */
+(function () {
+  'use strict';
+  var API = 'https://rosh-berosh.smwlyqswkwt232.workers.dev';
+  try {
+    if (!window.fetch || /(?:admin|mail)\.html$/.test(location.pathname)) return;
+    if (/[?&](?:live|preview|handoff|sso)=/.test(location.search)) return;
+    var json = function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); };
+    var early = { api: API };
+    early.site = fetch('data/site.json', { cache: 'no-cache' }).then(json);
+    // הקטלוג הציבורי, בלי כותרות — בקשה "פשוטה", בלי בדיקת CORS מקדימה
+    early.catalog = fetch(API + '/api/program/catalog', { cache: 'no-store' }).then(json);
+    early.site.catch(function () {}); early.catalog.catch(function () {});
+    window.RoshEarly = early;
+  } catch (e) { /* */ }
+})();

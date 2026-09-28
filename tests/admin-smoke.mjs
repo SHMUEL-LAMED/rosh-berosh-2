@@ -517,15 +517,16 @@ check(await page.evaluate(() => document.body.classList.contains('admin-locked')
   await p3.click('.site-nav a[href="guest.html"]');
   await p3.waitForSelector('.guest-card');
   // המגישים: עד שנשמרה רשימה בניהול — המגישים של "מאחורי המיקרופון", בראש הדף
-  check((await p3.locator('.hosts-section .host-card b').allTextContents()).join('|') === 'קובי בלום|ירמי סלייטר|מיכאל לוי', 'בראש הדף: המגישים (כיום, ואחריהם לשעבר)');
-  check((await p3.locator('.hosts-section .host-card.past').count()) === 1, 'מגיש לשעבר מסומן בנפרד');
+  check((await p3.locator('.hosts-section .host-card b').allTextContents()).join('|') === 'קובי בלום|ירמי סלייטר|מיכאל לוי|ארי וייזר|חיים וינר|דודי זינגר', 'בראש הדף: המגישים (כיום, ואחריהם לשעבר)');
+  check((await p3.locator('.hosts-section .host-card.past').count()) === 4, 'מגיש לשעבר מסומן בנפרד');
   await p3.click('.host-card >> text=ירמי סלייטר');
   await p3.waitForSelector('.host-hero h1');
-  const expected = await p3.evaluate(() => window.RoshStore.episodes().filter((e) => e.season === 'slater' || e.season === 'trio').length);
+  const expected = await p3.evaluate(() => window.RoshStore.episodes().filter((e) => e.hosts.length ? e.hosts.includes('ירמי סלייטר') : e.season === 'slater' || e.season === 'trio').length);
   check((await p3.textContent('.host-hero h1')) === 'ירמי סלייטר' && expected > 0 && (await p3.locator('.ep-grid .ep-card').count()) === Math.min(24, expected), 'דף מגיש: התוכניות מהעונות שהגיש');
   await p3.goBack();
   await p3.waitForSelector('.guest-card');
-  check((await p3.locator('.guest-card b').allTextContents()).join('|') === 'דוד לוי|שרה כהן', 'דף כל האורחים — מהרבות למעטות, ואותו אורח גם עם רווח כפול');
+  const names = await p3.locator('.guest-card b').allTextContents();
+  check(names.includes('דוד לוי') && names.includes('שרה כהן') && names.filter((name) => name === 'דוד לוי').length === 1 && (await p3.locator('.guest-group-title').allTextContents()).includes('חברי פאנל'), 'דף האורחים והפאנליסטים — אותו אורח גם עם רווח כפול');
   await p3.close();
   published = before;
 }

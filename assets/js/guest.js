@@ -1,7 +1,8 @@
-/* דף האורחים.
-   guest.html?g=<שם>  — דף של אורח אחד: התמונה, שורת התפקיד והמילים שנכתבו עליו בניהול,
-                        קישורים, וכל התוכניות שהתארח בהן (מהחדשה לישנה), עם "האזנה ברצף".
-   guest.html         — כל האורחים, עם חיפוש.
+/* דף המגישים והאורחים.
+   guest.html            — המגישים (מהניהול, בסדר שנקבע שם) ומתחתם כל האורחים, עם חיפוש.
+   guest.html?host=<שם>  — דף של מגיש: התמונה, התפקיד, המילים עליו, קישורים, והתוכניות מהעונות שהגיש.
+   guest.html?g=<שם>     — דף של אורח אחד: התמונה, שורת התפקיד והמילים שנכתבו עליו בניהול,
+                           קישורים, וכל התוכניות שהתארח בהן (מהחדשה לישנה), עם "האזנה ברצף".
    האורחים נגזרים מהתוכניות הציבוריות (RoshStore.guests); הפרופיל נכתב בניהול (settings.guests). */
 (async function () {
   'use strict';
@@ -21,6 +22,9 @@
   const avatar = (g, cls = '') => g.profile?.photo
     ? `<img class="guest-avatar ${cls}" src="${esc(g.profile.photo)}" alt="" loading="lazy" decoding="async">`
     : `<span class="guest-avatar ${cls}" style="--h:${hueOf(g.key)}" aria-hidden="true">${esc(initials(g.name))}</span>`;
+  const hostAvatar = (h, cls = '') => h.photo
+    ? `<img class="guest-avatar ${cls}" src="${esc(h.photo)}" alt="" loading="lazy" decoding="async">`
+    : `<span class="guest-avatar ${cls}" style="--h:${hueOf(h.key)}" aria-hidden="true">${esc(initials(h.name))}</span>`;
   const years = (eps) => {
     const ys = eps.map((e) => Number(String(e.date || '').slice(0, 4))).filter(Boolean);
     if (!ys.length) return '';
@@ -29,8 +33,8 @@
   };
   const plural = (n) => (n === 1 ? 'תוכנית אחת' : `${n} תוכניות`);
 
-  const name = (U.qs('g') || '').trim();
-  if (name) renderGuest(name); else renderAll();
+  const name = (U.qs('g') || '').trim(), hostName = (U.qs('host') || '').trim();
+  if (hostName) renderHost(hostName); else if (name) renderGuest(name); else renderAll();
   U.reveal();
 
   function renderGuest(wanted) {
@@ -81,16 +85,88 @@
     }, { signal });
   }
 
-  function renderAll() {
-    const all = S.guests();
-    document.title = 'האורחים — ראש בראש';
-    if (!all.length) {
-      box.innerHTML = '<div class="card"><div class="state"><span class="mark">✦</span><h3>עדיין אין כאן אורחים</h3><p>כשהאורחים של התוכניות יתווספו, כל אחד יקבל כאן דף משלו.</p><div class="actions"><a class="btn primary" href="archive.html">לארכיון התוכניות <span>←</span></a></div></div></div>';
+  /** "האזנה ברצף": הראשונה מתנגנת עכשיו, והשאר נכנסות לתור — מהישנה לחדשה, כמו שהיו בשידור */
+  function playAll(list) {
+    const [head, ...rest] = list.slice().reverse();
+    rest.forEach((e) => S.queue.add(e.id));
+    window.RoshPlayer?.load(head);
+    if (rest.length) U.notify(`${rest.length === 1 ? 'תוכנית נוספת נכנסה' : `${rest.length} תוכניות נוספות נכנסו`} לתור.`, 'success');
+  }
+  async function share(url, title) {
+    if (navigator.share) { try { await navigator.share({ title, url }); return; } catch { /* בוטל — ממשיכים להעתקה */ } }
+    const copied = await U.copy(url);
+    U.notify(copied ? 'הקישור לדף הועתק.' : url, copied ? 'success' : 'info');
+  }
+
+  function renderHost(wanted) {
+    const h = S.host(wanted);
+    if (!h) {
+      document.title = 'מגיש לא נמצא — ראש בראש';
+      box.innerHTML = `<div class="card"><div class="state"><span class="mark">?</span><h3>לא מצאנו מגיש בשם „${esc(wanted)}”</h3><div class="actions"><a class="btn primary" href="guest.html">למגישים ולאורחים <span>←</span></a></div></div></div>`;
       return;
     }
+    document.title = `${h.name} — מגיש בראש בראש`;
+    const eps = h.episodes;
+    const playable = eps.filter((e) => e.stream || U.streamUrl(e));
+    const seasons = S.seasons().filter((s) => h.seasons.includes(s.id));
+    const facts = [h.current ? 'מגיש כיום' : 'מגיש לשעבר', eps.length ? plural(eps.length) : '', years(eps)].filter(Boolean);
     box.innerHTML = `
+<article class="card guest-hero host-hero" style="--h:${hueOf(h.key)}" data-reveal>
+  <div class="guest-hero-media">${hostAvatar(h, 'xl')}</div>
+  <div class="guest-hero-text">
+    <p class="kicker"><a href="guest.html">המגישים והאורחים</a> · ${h.current ? 'מגיש התוכנית' : 'מגיש לשעבר'}</p>
+    <h1>${esc(h.name)}</h1>
+    ${h.role ? `<p class="guest-role">${esc(h.role)}</p>` : ''}
+    <p class="guest-facts">${facts.map(esc).join('<i aria-hidden="true">·</i>')}</p>
+    ${h.bio ? `<div class="guest-bio">${h.bio.split(/\n{2,}/).map((para) => `<p>${esc(para).replace(/\n/g, '<br>')}</p>`).join('')}</div>` : ''}
+    ${seasons.length ? `<p class="host-seasons">${seasons.map((s) => `<a class="chip" href="archive.html?season=${encodeURIComponent(s.id)}" style="${U.seasonVars(s.id)}">${esc(s.title)}</a>`).join('')}</p>` : ''}
+    <div class="actions">
+      ${playable.length ? `<button type="button" class="btn primary" data-play-all>▶ ${playable.length > 1 ? `האזנה ברצף ל־${playable.length} התוכניות` : 'האזנה לתוכנית'}</button>` : ''}
+      ${h.links.map((l) => `<a class="btn" href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.label || new URL(l.url).hostname.replace(/^www\./, ''))} ↗</a>`).join('')}
+      <button type="button" class="btn ghost" data-share-host>שיתוף הדף</button>
+    </div>
+  </div>
+</article>
+${eps.length ? `<section class="grid-section">
+  <div class="grid-head"><div><p class="kicker">להאזנה</p><h2>התוכניות עם ${esc(h.name)}</h2></div></div>
+  <div class="ep-grid">${eps.slice(0, 24).map((e) => U.epCard(e)).join('')}</div>
+  ${eps.length > 24 ? `<p class="cue-hint">ועוד ${eps.length - 24} — ${seasons.map((s) => `<a href="archive.html?season=${encodeURIComponent(s.id)}">${esc(s.title)}</a>`).join(' · ')}</p>` : ''}
+</section>` : ''}`;
+    box.querySelector('[data-play-all]')?.addEventListener('click', () => playAll(playable), { signal });
+    box.querySelector('[data-share-host]')?.addEventListener('click', () => share(new URL(`guest.html?host=${encodeURIComponent(h.name)}`, document.baseURI).href, `${h.name} בראש בראש`), { signal });
+  }
+
+  /** חלק המגישים בראש הדף: המגישים כיום, ואחריהם מי שהגיש בעבר */
+  function hostsHtml() {
+    const list = S.hosts();
+    if (!list.length) return '';
+    const card = (h) => `
+<a class="host-card${h.current ? '' : ' past'}" href="guest.html?host=${encodeURIComponent(h.name)}" style="--h:${hueOf(h.key)}">
+  ${hostAvatar(h, 'lg')}
+  <span class="host-card-text"><b>${esc(h.name)}</b><small>${esc(h.role || (h.current ? 'מגיש' : 'מגיש לשעבר'))}</small>${h.bio ? `<span class="host-card-bio">${esc(h.bio.length > 140 ? `${h.bio.slice(0, 140).trim()}…` : h.bio)}</span>` : ''}<em>${h.count ? plural(h.count) : ''}</em></span>
+</a>`;
+    const now = list.filter((h) => h.current), past = list.filter((h) => !h.current);
+    return `
+<section class="card hosts-section" data-reveal>
+  <div class="section-title"><div><p class="kicker">מאחורי המיקרופון</p><h1>המגישים</h1></div></div>
+  <div class="card-body">
+    ${now.length ? `<div class="host-grid">${now.map(card).join('')}</div>` : ''}
+    ${past.length ? `${now.length ? '<p class="kicker host-past-title">הגישו בעבר</p>' : ''}<div class="host-grid">${past.map(card).join('')}</div>` : ''}
+  </div>
+</section>`;
+  }
+
+  function renderAll() {
+    const all = S.guests();
+    const hostsBlock = hostsHtml();
+    document.title = 'המגישים והאורחים — ראש בראש';
+    if (!all.length) {
+      box.innerHTML = hostsBlock + '<div class="card"><div class="state"><span class="mark">✦</span><h3>עדיין אין כאן אורחים</h3><p>כשהאורחים של התוכניות יתווספו, כל אחד יקבל כאן דף משלו.</p><div class="actions"><a class="btn primary" href="archive.html">לארכיון התוכניות <span>←</span></a></div></div></div>';
+      return;
+    }
+    box.innerHTML = `${hostsBlock}
 <section class="card">
-  <div class="section-title"><div><p class="kicker">מי היה אצלנו</p><h1>האורחים</h1></div><strong id="guest-count">${all.length}</strong></div>
+  <div class="section-title"><div><p class="kicker">מי היה אצלנו</p><${hostsBlock ? 'h2' : 'h1'} class="guests-title">האורחים</${hostsBlock ? 'h2' : 'h1'}></div><strong id="guest-count">${all.length}</strong></div>
   <div class="card-body">
     <form class="search-box" role="search" id="guest-search"><span class="search-glyph" aria-hidden="true">♫</span><label for="guest-q" class="visually-hidden">חיפוש אורח</label><input id="guest-q" type="search" placeholder="חפשו אורח…" autocomplete="off"></form>
     <div class="guest-grid" id="guest-list"></div>

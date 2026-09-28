@@ -95,7 +95,7 @@
     const c = raw?.contacts && typeof raw.contacts === 'object' ? raw.contacts : {};
     const contacts = { ...CONTACT_DEFAULTS };
     for (const k of Object.keys(CONTACT_DEFAULTS)) if (typeof c[k] === 'string') contacts[k] = c[k].trim();
-    return { banner, updates, survey, contacts, polls: normPolls(raw?.polls), guests: normGuests(raw?.guests) };
+    return { banner, updates, survey, contacts, polls: normPolls(raw?.polls), guests: normGuests(raw?.guests), hosts: normHosts(raw?.hosts) };
   }
 
   /* ---------- אורחים: הפרופיל שנכתב בניהול (תמונה, שורת תפקיד, כמה מילים וקישורים).
@@ -112,6 +112,34 @@
       return [{ key, name, role: String(g?.role || '').trim(), bio: String(g?.bio || '').trim(), photo: /^https:\/\//i.test(String(g?.photo || '')) ? String(g.photo).trim() : '', links }];
     });
   }
+  /* ---------- מגישים (settings.hosts): אותם כללים כמו בשרת (worker/program-hosts.js).
+     עד שנשמרה רשימה בניהול — המגישים שהופיעו תמיד בפסקה "מאחורי המיקרופון". */
+  const DEFAULT_HOSTS = [
+    { name: 'קובי בלום', role: 'מגיש', bio: '', photo: '', links: [], seasons: ['slater', 'levi', 'trio'], current: true },
+    { name: 'ירמי סלייטר', role: 'מגיש', bio: '', photo: '', links: [], seasons: ['slater', 'trio'], current: true },
+    { name: 'מיכאל לוי', role: 'מייסד התוכנית', bio: '', photo: '', links: [], seasons: ['levi', 'trio'], current: false },
+  ];
+  function normHosts(raw) {
+    if (!Array.isArray(raw)) return DEFAULT_HOSTS.map((h) => ({ ...h, links: [], seasons: [...h.seasons] }));
+    const seen = new Set();
+    return raw.flatMap((h) => {
+      const name = String(h?.name || '').replace(/\s+/g, ' ').trim(), key = guestKey(name);
+      if (!key || seen.has(key)) return [];
+      seen.add(key);
+      const links = (Array.isArray(h?.links) ? h.links : []).map((l) => ({ label: String(l?.label || '').trim(), url: String(l?.url || '').trim() })).filter((l) => /^https?:\/\//i.test(l.url));
+      return [{ name, role: String(h?.role || '').trim(), bio: String(h?.bio || '').trim(), photo: /^https:\/\//i.test(String(h?.photo || '')) ? String(h.photo).trim() : '', links, seasons: (Array.isArray(h?.seasons) ? h.seasons : []).map(String), current: h?.current !== false }];
+    });
+  }
+  /** המגישים עם התוכניות שלהם (מהעונות שהגישו), בסדר שנקבע בניהול */
+  function hosts() {
+    const eps = episodes();
+    return (state.data.settings?.hosts || []).map((h) => {
+      const own = eps.filter((e) => h.seasons.includes(e.season));
+      return { ...h, key: guestKey(h.name), episodes: own, count: own.length };
+    });
+  }
+  function host(name) { const key = guestKey(name); return key ? hosts().find((h) => h.key === key) || null : null; }
+
   /** כל האורחים באתר: מי שמופיע בתוכניות הציבוריות (עם הפרופיל שלו, אם נכתב), מהרבות למעטות.
       השם המוצג הוא השם מהפרופיל, או הכתיב הנפוץ ביותר בתוכניות. אורח בלי אף תוכנית ציבורית לא מוצג. */
   function guests() {
@@ -982,7 +1010,7 @@
 
   window.RoshStore = {
     state, ready, load, sb, prefs, positions, last, later, history, queue, listening, likes, moments, me, admin,
-    episodes, seasons, bySlug, byId, latest, featured, neighbors, searchEpisodes, suggest, guests, guest, guestKey,
+    episodes, seasons, bySlug, byId, latest, featured, neighbors, searchEpisodes, suggest, guests, guest, guestKey, hosts, host,
     bannerActive, scheduled, nowIL, todayIL, onSession, signedIn, signOut, forgetSession,
     get site() { return state.site; },
     get data() { return state.data; },

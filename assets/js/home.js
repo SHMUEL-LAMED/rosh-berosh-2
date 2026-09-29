@@ -63,7 +63,7 @@
       <div class="meta">
         ${feat.date ? `<span class="pill">${esc(U.fmtWeekday(feat.date))}, ${esc(fmtDate(feat.date))}</span><span class="pill">${esc(U.fmtHebDate(feat.date))}</span>` : ''}
         ${feat.duration ? `<span class="pill teal">${esc(fmtDuration(feat.duration))}</span>` : ''}
-        ${feat.guests.length ? `<span class="pill navy">עם ${feat.guests.map((g) => `<a class="guest-link" href="guest.html?g=${encodeURIComponent(g)}">${esc(g)}</a>`).join(', ')}</span>` : ''}
+        ${feat.guests.length ? `<span class="pill navy">עם ${feat.guests.map((g) => `<a class="guest-link" href="archive.html?guest=${encodeURIComponent(g)}">${esc(g)}</a>`).join(', ')}</span>` : ''}
         ${feat.tags.map((t) => `<a class="chip" href="archive.html?q=${encodeURIComponent(t)}">${esc(t)}</a>`).join('')}
       </div>
       <p class="desc">${esc(feat.description)}</p>

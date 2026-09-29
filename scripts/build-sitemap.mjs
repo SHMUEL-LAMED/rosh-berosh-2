@@ -12,7 +12,6 @@ const pages = [
   { loc: base, priority: '1.0', changefreq: 'weekly' },
   { loc: `${base}archive.html`, priority: '0.9', changefreq: 'weekly' },
   { loc: `${base}updates.html`, priority: '0.5', changefreq: 'weekly' },
-  { loc: `${base}guest.html`, priority: '0.5', changefreq: 'weekly' },
   { loc: `${base}negishut.html`, priority: '0.2', changefreq: 'yearly' },
   ...publicEpisodes(catalog)
     .map((e) => ({ loc: episodeUrl(e), lastmod: /^\d{4}-\d{2}-\d{2}$/.test(e.date || '') ? e.date : undefined, priority: '0.7', changefreq: 'monthly' })),

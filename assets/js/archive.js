@@ -21,7 +21,7 @@
     season: params.get('season') || '',
     audio: params.get('audio') === '1',
     later: params.get('later') === '1',   // רק מה ששמרתם "לאחר כך"
-    guest: params.get('guest') || '',     // רק תוכניות עם האורח הזה
+    guest: params.get('guest') || '',     // רק תוכניות עם האדם הזה (מגיש, אורח או חבר פאנל)
     sort: params.get('sort') || 'new',
     view: params.get('view') || S.prefs.get('archiveView', 'grid'),
   };
@@ -40,10 +40,10 @@
   const all = S.episodes();
   /** אותו אורח גם כשהשם נכתב עם רווחים או ניקוד אחרים */
   const guestKey = (name) => String(name || '').replace(/[\u0591-\u05C7]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
-  /** כל האורחים בקטלוג: השם הנפוץ ביותר לכל אורח, וכמה תוכניות — מהרבות למעטות */
+  /** כל מי שהיה בתוכניות — מגישים, אורחים וחברי פאנל: השם הנפוץ ביותר לכל אחד, וכמה תוכניות — מהרבות למעטות */
   const guests = (() => {
     const m = new Map();
-    for (const e of all) for (const g of e.guests) {
+    for (const e of all) for (const g of [...e.hosts, ...e.guests, ...e.panelists]) {
       const k = guestKey(g); if (!k) continue;
       const x = m.get(k) || { key: k, name: g.replace(/\s+/g, ' ').trim(), count: 0 }; x.count++; m.set(k, x);
     }
@@ -72,12 +72,11 @@
 ${seasons.filter((s) => s.count).map((s) => `<button type="button" class="chip" data-season="${esc(s.id)}" style="${U.seasonVars(s.id)}" aria-pressed="${state.season === s.id}">${esc(s.title)} <span style="opacity:.6">${s.count}</span></button>`).join('')}
 </div>
 <div class="filter-tools">
-${guests.length ? `<label class="visually-hidden" for="guest">אורח</label>
+${guests.length ? `<label class="visually-hidden" for="guest">מגיש או אורח</label>
 <select id="guest" class="input guest-select${state.guest ? ' on' : ''}">
-  <option value="">כל האורחים</option>
+  <option value="">כל המגישים והאורחים</option>
   ${guests.map((g) => `<option value="${esc(g.name)}" ${guestKey(state.guest) === g.key ? 'selected' : ''}>${esc(g.name)} (${g.count})</option>`).join('')}
-</select>
-<a class="chip" href="guest.html">דפי האורחים ←</a>` : ''}
+</select>` : ''}
 <span class="spacer"></span>
 <label class="visually-hidden" for="sort">מיון</label>
 <select id="sort" class="input" style="width:auto;min-height:36px;padding-block:6px;border-radius:99px;font-size:12px;font-weight:800">
@@ -99,7 +98,8 @@ ${guests.length ? `<label class="visually-hidden" for="guest">אורח</label>
     if (state.season) list = list.filter((e) => e.season === state.season);
     if (state.audio) list = list.filter((e) => e.stream);
     if (state.later) { const l = S.later.list(); list = list.filter((e) => l.includes(e.id)); }
-    if (state.guest) { const k = guestKey(state.guest); list = list.filter((e) => e.guests.some((g) => guestKey(g) === k)); }
+    // "עם מי": מגיש, אורח או חבר פאנל — השמות בדפי התוכניות מובילים לכאן
+    if (state.guest) { const k = guestKey(state.guest); list = list.filter((e) => [...e.hosts, ...e.guests, ...e.panelists].some((g) => guestKey(g) === k)); }
     list = S.searchEpisodes(state.q, list);
     const by = {
       new: (a, b) => (b.date || '').localeCompare(a.date || '') || (b.number || 0) - (a.number || 0),

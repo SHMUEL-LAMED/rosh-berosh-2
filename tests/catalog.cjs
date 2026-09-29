@@ -42,7 +42,10 @@ for(const f of ['assets/js/home.js','assets/js/archive.js','assets/js/episode.js
 }
 
 // Cloudflare uploads must require an administrator, send the bearer token and
-// preserve the exact file bytes while reporting progress.
+// preserve the exact file bytes while reporting progress. A large file goes up in
+// parts, several at a time; a part that fails is retried by itself, an upload that
+// was cut off resumes from the parts that already arrived when the same file is
+// chosen again, and a permission error is never retried.
 async function uploadCheck() {
  const file=new Blob([new Uint8Array(1024).fill(73)],{type:'audio/mpeg'});
  file.name='test.mp3'; file.lastModified=123;
@@ -51,30 +54,88 @@ async function uploadCheck() {
   constructor(){this.headers={};this.upload={};}
   open(method,url){this.method=method;this.url=url;}
   setRequestHeader(k,v){this.headers[k]=v;}
+  abort(){}
   async send(body){request={method:this.method,url:this.url,headers:this.headers,body:Buffer.from(await body.arrayBuffer())};this.upload.onprogress?.({lengthComputable:true,loaded:body.size,total:body.size});this.status=200;this.responseText=JSON.stringify({url:'https://api.example/media/program/ep-90/file.mp3'});this.onload();}
  }
+ const storage=new Map();
+ const localStorage={getItem:k=>storage.has(k)?storage.get(k):null,setItem:(k,v)=>storage.set(k,String(v)),removeItem:k=>storage.delete(k)};
+ // ההמתנות בין ניסיונות מקוצרות; שעון התקיעה (45 שניות) נשאר אמיתי ואינו מחזיק את התהליך
+ const fast=(fn,ms)=>{const stall=ms>=45000;const t=setTimeout(fn,stall?ms:Math.min(ms||0,2));if(stall)t.unref?.();return t;};
  const sb={session:{token:'secret'},base:p=>'https://api.example'+p,isAdmin:async()=>true};
- const ctx={window:{RoshStore:{sb}},XMLHttpRequest:XHR,encodeURIComponent,Promise};
- vm.runInNewContext(fs.readFileSync('assets/js/upload.js','utf8'),ctx);
+ const sandbox=(xhr)=>{const ctx={window:{RoshStore:{sb}},XMLHttpRequest:xhr,encodeURIComponent,setTimeout:fast,clearTimeout,localStorage};vm.runInNewContext(fs.readFileSync('assets/js/upload.js','utf8'),ctx);return ctx;};
+ const ctx=sandbox(XHR);
  const progress=[];
  const url=await ctx.window.RoshUpload(file,'ep-90','audio',p=>progress.push(p));
  assert.equal(url,'https://api.example/media/program/ep-90/file.mp3');
  assert.equal(request.method,'POST'); assert.equal(request.headers.Authorization,'Bearer secret');
  assert.deepEqual(request.body,Buffer.from(await file.arrayBuffer())); assert(progress.includes(100));
- // קובץ גדול (הקלטה של שעה וחצי) עולה בחלקים, בלי מגבלת 50MB
- const big=new Blob([new Uint8Array(45*1024*1024).fill(7)],{type:'audio/mpeg'}); big.name='long.mp3';
- const parts=[]; const calls=[];
- class XHR2 extends XHR { async send(body){ if(this.method==='PUT'){ parts.push({url:this.url,size:body.size}); this.upload.onprogress?.({lengthComputable:true,loaded:body.size}); this.status=200; this.responseText=JSON.stringify({etag:`e${parts.length}`}); this.onload(); } else return super.send(body); } }
- sb.call=async(path,opts)=>{ calls.push({path,body:opts?.body}); if(path.includes('/upload/start')) return {key:'program/ep-90/x.mp3',uploadId:'u1',partSize:20*1024*1024}; if(path.includes('/upload/complete')) return {url:'https://api.example/media/program/ep-90/x.mp3'}; return {}; };
- const ctx2={window:{RoshStore:{sb}},XMLHttpRequest:XHR2,encodeURIComponent,Promise,setTimeout};
- vm.runInNewContext(fs.readFileSync('assets/js/upload.js','utf8'),ctx2);
+
+ // קובץ גדול (הקלטה של שעה וחצי) עולה בחלקים, כמה במקביל, בלי מגבלת גודל; חלק שנכשל פעם אחת עולה שוב לבד
+ const big=new Blob([new Uint8Array(45*1024*1024).fill(7)],{type:'audio/mpeg'}); big.name='long.mp3'; big.lastModified=5;
+ const parts=[]; const calls=[]; const failOnce=new Set(); let inFlight=0, peak=0;
+ const partOf=(xhr)=>Number(new URL(xhr.url).searchParams.get('part'));
+ class XHR2 extends XHR {
+  async send(body){
+   if(this.method!=='PUT') return super.send(body);
+   const part=partOf(this);
+   inFlight++; peak=Math.max(peak,inFlight); await new Promise(r=>setTimeout(r,1)); inFlight--;
+   if(failOnce.delete(part)) return this.onerror();
+   parts.push({part,size:body.size}); this.upload.onprogress?.({lengthComputable:true,loaded:body.size});
+   this.status=200; this.responseText=JSON.stringify({etag:`e${part}`}); this.onload();
+  }
+ }
+ sb.call=async(path,opts)=>{ calls.push({path,body:opts?.body}); if(path.includes('/upload/start')) return {key:'program/ep-90/x.mp3',uploadId:'u1',partSize:10*1024*1024}; if(path.includes('/upload/complete')) return {url:'https://api.example/media/program/ep-90/x.mp3'}; return {}; };
+ const allParts=JSON.stringify([1,2,3,4,5].map(part=>({part,etag:`e${part}`})));
+ const ctx2=sandbox(XHR2);
  const bigProgress=[];
+ failOnce.add(2);
  assert.equal(await ctx2.window.RoshUpload(big,'ep-90','audio',p=>bigProgress.push(p)),'https://api.example/media/program/ep-90/x.mp3');
- assert.equal(parts.length,3); assert.equal(parts.reduce((n,p)=>n+p.size,0),big.size);
- assert.equal(JSON.stringify(calls.find(c=>c.path.includes('/upload/complete')).body.parts),JSON.stringify([{part:1,etag:'e1'},{part:2,etag:'e2'},{part:3,etag:'e3'}]));
+ assert.equal(parts.length,5); assert.equal(parts.reduce((n,p)=>n+p.size,0),big.size);
+ assert(peak>1,'parts upload in parallel');
+ assert.equal(JSON.stringify(calls.find(c=>c.path.includes('/upload/complete')).body.parts),allParts);
  assert(bigProgress.includes(100));
+ assert(!calls.some(c=>c.path.includes('/upload/abort')));
+ assert.equal(storage.size,0,'a finished upload is forgotten');
+
+ // ניתוק ממושך: החלקים שעלו נשארים בשרת ובזיכרון, ובחירה חוזרת של אותו הקובץ ממשיכה מהם
+ parts.length=0; calls.length=0;
+ class XHR3 extends XHR2 { async send(body){ if(this.method==='PUT'&&partOf(this)>=3){ await new Promise(r=>setTimeout(r,1)); return this.onerror(); } return super.send(body); } }
+ const ctx3=sandbox(XHR3);
+ await assert.rejects(ctx3.window.RoshUpload(big,'ep-90','audio',()=>{}),/תמשיך מאותה נקודה/);
+ assert(!calls.some(c=>c.path.includes('/upload/abort')),'an interrupted upload stays on the server for resuming');
+ assert.equal(storage.size,1);
+ assert.deepEqual(parts.map(p=>p.part).sort(),[1,2]);
+ parts.length=0; calls.length=0;
+ const ctx4=sandbox(XHR2);
+ const resumed=[];
+ assert.equal(await ctx4.window.RoshUpload(big,'ep-90','audio',p=>resumed.push(p)),'https://api.example/media/program/ep-90/x.mp3');
+ assert(!calls.some(c=>c.path.includes('/upload/start')),'no new upload is started');
+ assert.deepEqual(parts.map(p=>p.part).sort(),[3,4,5]);
+ assert.equal(JSON.stringify(calls.find(c=>c.path.includes('/upload/complete')).body.parts),allParts);
+ assert(resumed.find(p=>p>0)>=40,'progress starts where the upload stopped');
+ assert.equal(storage.size,0);
+
+ // העלאה שנזכרה אבל כבר לא קיימת בשרת (410): מתחילים מחדש, בלי לתקוע את המנהל
+ storage.set('rosh:upload:resume',JSON.stringify({[`ep-90|audio|long.mp3|${big.size}|5`]:{key:'program/ep-90/old.mp3',uploadId:'old',partSize:10*1024*1024,etags:{1:'x1'},at:Date.now()}}));
+ parts.length=0; calls.length=0;
+ class XHR5 extends XHR2 { async send(body){ if(this.method==='PUT'&&this.url.includes('uploadId=old')){ this.status=410; this.responseText=JSON.stringify({error:'ההעלאה כבר לא קיימת.'}); return this.onload(); } return super.send(body); } }
+ const ctx5=sandbox(XHR5);
+ assert.equal(await ctx5.window.RoshUpload(big,'ep-90','audio',()=>{}),'https://api.example/media/program/ep-90/x.mp3');
+ assert.equal(calls.filter(c=>c.path.includes('/upload/start')).length,1);
+ assert.deepEqual(parts.map(p=>p.part).sort(),[1,2,3,4,5]);
+ assert.equal(storage.size,0);
+
+ // שגיאת הרשאה אינה מנוסה שוב: ההעלאה מבוטלת בשרת ונשכחת
+ parts.length=0; calls.length=0;
+ class XHR6 extends XHR2 { async send(body){ if(this.method==='PUT'){ this.status=403; this.responseText=JSON.stringify({error:'אין הרשאת ניהול.'}); return this.onload(); } return super.send(body); } }
+ const ctx6=sandbox(XHR6);
+ await assert.rejects(ctx6.window.RoshUpload(big,'ep-90','audio',()=>{}),/אין הרשאת ניהול/);
+ assert.equal(parts.length,0);
+ assert(calls.some(c=>c.path.includes('/upload/abort')));
+ assert.equal(storage.size,0);
+
  sb.isAdmin=async()=>false;
  await assert.rejects(ctx.window.RoshUpload(file,'ep-90','audio',()=>{}),/מנהל/);
- console.log('Catalog, stream URLs, public links, Cloudflare upload authorization and byte integrity passed.');
+ console.log('Catalog, stream URLs, public links, Cloudflare upload authorization, parallel parts, retries, resuming and byte integrity passed.');
 }
 uploadCheck().catch(e=>{console.error(e);process.exitCode=1;});

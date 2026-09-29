@@ -194,6 +194,7 @@
       flushListen();
       P.candidates = candidates;
       P.candidateIndex = 0;
+      P.retriedAt = null;
       audio.src = candidates[0];
       audio.load();
       P.listened = 0;
@@ -487,7 +488,28 @@
   const paintPlaying = () => document.body.classList.toggle('is-playing', !audio.paused && !audio.ended);
   audio.addEventListener('play', () => { paint(); paintPlaying(); emit('play'); });
   audio.addEventListener('playing', paintPlaying);
-  audio.addEventListener('waiting', () => document.body.classList.remove('is-playing'));
+  /* הזרמה שנתקעה באמצע (החיבור נפל, השרת הפסיק לשלוח): אחרי כמה שניות בלי התקדמות
+     טוענים מחדש מאותה נקודה — במקום שהנגן יישאר תקוע. */
+  const STALL_MS = 8000;
+  let stallTimer = 0;
+  function resume(src) {
+    const t = audio.currentTime;
+    audio.src = src;
+    audio.load();
+    if (t > 0) { try { audio.currentTime = t; } catch { /* */ } }
+    if (P.wantPlay) play();
+  }
+  function watchStall() {
+    clearTimeout(stallTimer);
+    stallTimer = setTimeout(() => {
+      if (!P.wantPlay || audio.paused || audio.ended || !audio.src || audio.readyState >= 3) return;
+      resume(audio.src);
+    }, STALL_MS);
+  }
+  audio.addEventListener('waiting', () => { document.body.classList.remove('is-playing'); watchStall(); });
+  audio.addEventListener('stalled', watchStall);
+  audio.addEventListener('playing', () => clearTimeout(stallTimer));
+  audio.addEventListener('pause', () => clearTimeout(stallTimer));
   audio.addEventListener('pause', () => { paint(); paintPlaying(); save(true); flushListen(); emit('pause'); });
   /* סוף תוכנית: אם יש תור — ממשיכים לבאה בתור מיד. אחרת מציעים את "התוכנית
      הבאה" — אותו כיוון כמו הכפתור ▸▸ בנגן (החדשה יותר). */
@@ -509,6 +531,12 @@
   audio.addEventListener('error', () => {
     paintPlaying();
     if (!P.episode || !audio.src) return;
+    // נפל באמצע ההאזנה: קודם מנסים שוב את אותו מקור מאותה נקודה (בדרך כלל זו רק תקלת רשת רגעית)
+    if (audio.currentTime > 0 && P.retriedAt !== audio.src) {
+      P.retriedAt = audio.src;
+      resume(audio.src);
+      return;
+    }
     // מקור נוסף? (למשל הכתובת הישירה כשה־Worker לא זמין)
     if (P.candidates && P.candidateIndex + 1 < P.candidates.length) {
       const wasPlaying = !audio.paused || P.wantPlay;

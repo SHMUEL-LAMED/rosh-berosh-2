@@ -484,49 +484,40 @@ check(await page.evaluate(() => document.body.classList.contains('admin-locked')
   await p2.close();
 }
 
-/* ---------- חיפוש לפי אורח ---------- */
+/* ---------- חיפוש לפי אדם: השמות בדפי התוכניות מובילים לארכיון המסונן; אין דף מגישים ואורחים ---------- */
 {
   const before = published;
   const base = published || catalog;
   // שלוש התוכניות האחרונות ברשימה — ישנות ומוצגות (בראש הרשימה יש כאן תוכניות בדיקה מתוזמנות)
   const n = base.episodes.length;
-  const eps = base.episodes.map((e, i) => (i === n - 1 || i === n - 3 ? { ...e, guests: ['דוד לוי'] } : i === n - 2 ? { ...e, guests: ['דוד  לוי', 'שרה כהן'] } : e));
+  const eps = base.episodes.map((e, i) => (i === n - 1 || i === n - 3 ? { ...e, guests: ['דוד לוי'] } : i === n - 2 ? { ...e, guests: ['דוד  לוי', 'שרה כהן'], hosts: ['מגיש בדיקה'], panelists: ['חבר פאנל בדיקה'] } : e));
   published = { ...base, episodes: eps };
   const p3 = await ctx.newPage();
   p3.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
   await p3.goto(`${BASE}/archive.html`);
   await p3.waitForSelector('#guest');
   const opts = await p3.$$eval('#guest option', (o) => o.map((x) => x.textContent));
-  check(opts[1] === 'דוד לוי (3)' && opts.includes('שרה כהן (1)'), 'רשימת האורחים בארכיון, עם מספר התוכניות (אותו שם גם עם רווח כפול)');
+  check(opts.includes('דוד לוי (3)') && opts.includes('שרה כהן (1)') && opts.includes('מגיש בדיקה (1)') && opts.includes('חבר פאנל בדיקה (1)'), 'רשימת המגישים, האורחים וחברי הפאנל בארכיון, עם מספר התוכניות (אותו שם גם עם רווח כפול)');
   await p3.selectOption('#guest', 'דוד לוי');
   await p3.waitForFunction(() => document.querySelectorAll('#results .ep-card').length === 3);
   check(p3.url().includes('guest='), 'סינון לפי אורח — 3 תוכניות, והכתובת נשמרת');
   const slug = eps[n - 2].slug;
   await p3.goto(`${BASE}/episode.html?ep=${encodeURIComponent(slug)}`);
   await p3.waitForSelector('.guest-link');
+  check((await p3.locator('a[href^="guest.html"]').count()) === 0, 'בדף התוכנית אין קישור לדף אורחים');
   await p3.click('.guest-link >> text=שרה כהן');
-  await p3.waitForSelector('.guest-hero h1');
-  check((await p3.textContent('.guest-hero h1')) === 'שרה כהן' && (await p3.locator('.ep-grid .ep-card').count()) === 1, 'שם אורח בדף התוכנית מוביל לדף האורח, עם כל התוכניות שלו');
-  await p3.click('.grid-head a[href^="archive.html?guest="]');
+  await p3.waitForURL(/archive\.html\?guest=/);
   await p3.waitForFunction(() => document.querySelectorAll('#results .ep-card').length === 1);
-  check((await p3.inputValue('#guest')) === 'שרה כהן', 'מדף האורח לארכיון המסונן לפי האורח');
+  check((await p3.inputValue('#guest')) === 'שרה כהן', 'שם אורח בדף התוכנית מוביל לארכיון המסונן לפי האורח, עם כל התוכניות שלו');
+  await p3.goto(`${BASE}/episode.html?ep=${encodeURIComponent(slug)}`);
+  await p3.waitForSelector('.guest-link');
+  await p3.click('.guest-link >> text=מגיש בדיקה');
+  await p3.waitForURL(/archive\.html\?guest=/);
+  await p3.waitForFunction(() => document.querySelectorAll('#results .ep-card').length === 1);
+  check((await p3.inputValue('#guest')) === 'מגיש בדיקה', 'גם שם של מגיש מוביל לארכיון המסונן לפי המגיש');
   await p3.goto(`${BASE}/index.html`);
   await p3.waitForSelector('#featured .card');
-  check((await p3.locator('.site-nav a[href="guest.html"]').innerText()) === 'מגישים ואורחים', '"מגישים ואורחים" בתפריט');
-  check((await p3.locator('.site-footer a[href="guest.html"]').count()) === 1 && (await p3.locator('.site-footer a[href="updates.html"]').count()) === 1, 'בתחתית כל דף: קישורים לעדכונים ולאורחים');
-  await p3.click('.site-nav a[href="guest.html"]');
-  await p3.waitForSelector('.guest-card');
-  // המגישים: עד שנשמרה רשימה בניהול — המגישים של "מאחורי המיקרופון", בראש הדף
-  check((await p3.locator('.hosts-section .host-card b').allTextContents()).join('|') === 'קובי בלום|ירמי סלייטר|מיכאל לוי|ארי וייזר|חיים וינר|שלמה גולדברג', 'בראש הדף: המגישים (כיום, ואחריהם לשעבר)');
-  check((await p3.locator('.hosts-section .host-card.past').count()) === 4, 'מגיש לשעבר מסומן בנפרד');
-  await p3.click('.host-card >> text=ירמי סלייטר');
-  await p3.waitForSelector('.host-hero h1');
-  const expected = await p3.evaluate(() => window.RoshStore.episodes().filter((e) => e.hosts.length ? e.hosts.includes('ירמי סלייטר') : e.season === 'slater' || e.season === 'trio').length);
-  check((await p3.textContent('.host-hero h1')) === 'ירמי סלייטר' && expected > 0 && (await p3.locator('.ep-grid .ep-card').count()) === Math.min(24, expected), 'דף מגיש: התוכניות מהעונות שהגיש');
-  await p3.goBack();
-  await p3.waitForSelector('.guest-card');
-  const names = await p3.locator('.guest-card b').allTextContents();
-  check(names.includes('דוד לוי') && names.includes('שרה כהן') && names.filter((name) => name === 'דוד לוי').length === 1 && (await p3.locator('.guest-group-title').allTextContents()).includes('חברי פאנל'), 'דף האורחים והפאנליסטים — אותו אורח גם עם רווח כפול');
+  check((await p3.locator('.site-nav a[href="guest.html"]').count()) === 0 && (await p3.locator('.site-footer a[href="guest.html"]').count()) === 0 && (await p3.locator('.site-footer a[href="updates.html"]').count()) === 1, 'אין דף מגישים ואורחים — לא בתפריט ולא בתחתית; הקישור לעדכונים נשאר');
   await p3.close();
   published = before;
 }

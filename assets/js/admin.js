@@ -69,6 +69,7 @@
     pushCount: null, epStats: new Map(), statsEp: '',
     ai: new Map(),         // מצב התמלול והסיכום לכל תוכנית
     ads: { episodeId: '', suggestions: null, ranges: [], loading: false, busy: false, error: '' },
+    uploads: 0,            // העלאות שרצות עכשיו
   };
   /* שום טיוטה לא נשמרת במכשיר — רק בשרת, לפי החשבון. מה שנשאר בדפדפן מגרסאות קודמות נמחק. */
   const DEVICE_DRAFT_KEYS = ['rosh:override', 'rosh:override-at', 'rosh:override-base'];
@@ -78,6 +79,9 @@
   const sameData = (a, b) => JSON.stringify(S.admin.normalize(a)) === JSON.stringify(S.admin.normalize(b));
   const liveEp = (id) => A.data.episodes.find((x) => x.id === id) || null;
   const jobsBusy = () => Object.values(A.jobs || {}).some((j) => j.running);
+  /* עדכון בכוח (app-update.js): האתר לא נטען מחדש כל עוד יש כאן משהו שטעינה הייתה קוטעת */
+  (window.RoshBusy = window.RoshBusy || []).push(() => A.unsynced || !!A.syncing || A.publishing || !!A.conflict || A.uploads > 0 || jobsBusy()
+    || !!A.proof?.running || A.ads.busy || A.ads.loading || Object.values(A.checks || {}).some((c) => c?.running) || [...A.ai.values()].some((s) => s?.running));
 
   /* ---------- שמירה אוטומטית בטיוטה המשותפת בשרת ---------- */
 
@@ -2443,6 +2447,7 @@ ${proofCard()}
 
   /** העלאת קובץ לתוכנית — מכפתור הבחירה או מגרירה */
   async function uploadFile(e, kind, file) {
+    A.uploads++;
     try {
       uploadStatus(e, kind, 'מתחילים להעלות…');
       // ההערה מגיעה כשההעלאה מנסה שוב אחרי ניתוק
@@ -2458,6 +2463,7 @@ ${proofCard()}
       U.notify('הקובץ הועלה. כשתלחצו פרסום, הוא יופיע באתר.', 'success');
       return true;
     } catch (err) { uploadStatus(e, kind, err.message); U.notify(err.message, 'error'); return false; }
+    finally { A.uploads--; }
   }
   /* גרירת קובץ לטופס התוכנית: הקלטה או תמונה — לפי סוג הקובץ. (כפתורי הבחירה נשארים.)
      קובץ שנגרר לדף אף פעם לא נפתח בדפדפן במקום הניהול (זה היה מוחק את מה שבזיכרון). */

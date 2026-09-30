@@ -36,13 +36,18 @@ jobs:
       - name: Build a static page per episode (episodes/<slug>.html, for search engines)
         run: node scripts/build-episode-pages.mjs
       # כל פריסה מסמנת את קובצי העיצוב והסקריפטים של האתר ב־?v=<commit>. לשונית שנפתחה לפני הפריסה
-      # מזהה את זה במעבר לדף אחר (router.js) וטוענת את הדף מחדש, במקום לצייר דף חדש עם קבצים ישנים.
+      # מזהה את זה במעבר לדף אחר (router.js) וטוענת את הדף מחדש, במקום לצייר דף חדש עם קבצים ישנים;
+      # ובלי מעבר — version.json עם אותו ערך, ש־app-update.js בודק (עדכון בכוח).
       - name: Stamp this version on the site's own CSS and JS links
         run: |
           v="${GITHUB_SHA::8}"
           find . -name '*.html' -not -path './.git/*' -print0 | xargs -0 sed -i -E "s#((href|src)=\"assets/(css|js)/[a-z0-9-]+\.(css|js))\"#\1?v=${v}\"#g"
           missing=$(grep -L "rosh.css?v=${v}" index.html episode.html episodes/*.html || true)
           if [ -n "$missing" ]; then echo "stamp missing in: $missing"; exit 1; fi
+          # עדכון בכוח: דפים פתוחים משווים את זה ל־?v= שלהם ונטענים מחדש כשהוא אחר (app-update.js)
+          printf '{"v":"%s"}\n' "$v" > version.json
+          missing=$(grep -L "app-update.js?v=${v}" *.html episodes/*.html || true)
+          if [ -n "$missing" ]; then echo "app-update stamp missing in: $missing"; exit 1; fi
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Upload static site

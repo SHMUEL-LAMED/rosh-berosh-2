@@ -2,7 +2,7 @@
    נתוני התוכניות נטענים תמיד מהרשת קודם (ונופלים למטמון אם אין), וההקלטות
    עצמן לא נשמרות. עיצוב וסקריפטים עם חותמת גרסה (?v=) נטענים מהמכשיר מיד. ניווט שנכשל ואין לו עותק שמור מקבל את offline.html.
    הגופנים של Google נשמרים במטמון נפרד (שורד החלפת גרסה) כדי שהאתר ייראה נכון גם בלי רשת. */
-const VERSION = 'rosh-v23-stream';
+const VERSION = 'rosh-v24-autoupdate';
 const FONTS = 'rosh-fonts-v1';
 const ASSETS = 'rosh-assets-v1';   // קבצים עם חותמת גרסה (שורד החלפת גרסה; כל קובץ נשמר בגרסה האחרונה בלבד)
 const OFFLINE = './offline.html';
@@ -73,6 +73,8 @@ self.addEventListener('fetch', (e) => {
   if (url.hostname === 'fonts.googleapis.com') { e.respondWith(staleWhileRevalidate(e, req)); return; }
   if (url.hostname === 'fonts.gstatic.com') { e.respondWith(cacheFirst(e, req)); return; }
   if (url.origin !== location.origin) return;
+  // גרסת האתר (app-update.js): תמיד מהרשת, ולא נשמרת
+  if (url.pathname.endsWith('/version.json')) return;
   // הקלטות: ישר מהרשת, בלי מטמון
   if (/\.(mp3|m4a|wav|ogg|aac|flac|opus|webm)$/i.test(url.pathname) || req.headers.has('range')) return;
   // נתונים: רשת קודם, מטמון כגיבוי (רק תשובה תקינה נשמרת — שגיאה לא דורסת את העותק הטוב)

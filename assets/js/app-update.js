@@ -1,88 +1,105 @@
-/* ראש בראש — רישום ה־Service Worker, ופס "האתר עודכן" כשגרסה חדשה נכנסת לתוקף.
+/* ראש בראש — רישום ה־Service Worker, ועדכון בכוח: כשעולה גרסה חדשה של האתר, דף פתוח נטען
+   מחדש לבד, בלי הודעה.
 
    נטען מכל דף (<script src="assets/js/app-update.js" defer>). כך אין בדפים סקריפט
    בתוך ה־HTML, ומדיניות האבטחה (CSP) יכולה לאסור סקריפטים כאלה.
-   - רושם את sw.js (רק ב־https; data-sw="off" על תגית הסקריפט מדלג — אזור הניהול).
-   - כשגרסה חדשה של sw.js משתלטת על דף שכבר היה בשליטת גרסה קודמת
-     (controllerchange), מוצג פס קטן: "האתר עודכן — לחצו לרענון".
-     בזמן ניגון (body.is-playing) הפס מחכה עד להשהיה, כדי לא להפריע להאזנה.
-   - הניווט באתר לא טוען דפים מחדש, ולכן בודקים עדכון גם כשחוזרים ללשונית
-     (לכל היותר פעם בחצי שעה). */
+   - רושם את sw.js (רק ב־https; data-sw="off" על תגית הסקריפט מדלג — אזור הניהול ועורך המייל).
+   - הגרסה: כל פריסה מסמנת את הסקריפט ב־?v=<commit> וכותבת את אותו ערך ל־version.json
+     (pages.yml). הדף שואל את version.json כל שתי דקות, וכשחוזרים ללשונית, לחלון או לרשת;
+     ערך אחר = גרסה חדשה. גם החלפת sw.js בגרסה חדשה (controllerchange) נחשבת עדכון.
+     מקומית (בלי ?v=) אין בדיקה.
+   - הטעינה מחכה לרגע בטוח: לא בזמן ניגון (body.is-playing או נגן שמתנגן), לא באמצע הקלדה,
+     לא כשחלון (dialog) פתוח, ולא כל עוד דף מחזיק (window.RoshBusy — רשימת פונקציות; הניהול
+     מחזיק כשיש שינויים שלא נשמרו, שמירה, פרסום, העלאה או עבודה שרצה). בדף ניהול שלא רשם
+     פונקציה משלו (עורך המייל) כל הקלדה מחזיקה, כי אין דרך לדעת אם נשמרה.
+   - אם אחרי הטעינה version.json עדיין אחר (מטמון בדרך), לא טוענים שוב לאותה גרסה במשך עשר
+     דקות — כדי שלא ייווצר מעגל טעינות. */
 (function () {
   'use strict';
   var sw = navigator.serviceWorker;
   var me = document.currentScript;
-  if (!sw) return;
+  var tool = !!(me && me.getAttribute('data-sw') === 'off');
+  var src = null;
+  try { src = me && me.src ? new URL(me.src) : null; } catch (e) { src = null; }
+  var current = src ? src.searchParams.get('v') || '' : '';
+  var versionUrl = src ? new URL('../../version.json', src).href : '';   // assets/js/ → שורש האתר
 
-  var hadController = !!sw.controller;   // בטעינה הראשונה אין — אז החלפה אינה "עדכון"
+  var CHECK_EVERY = 2 * 60 * 1000, MIN_GAP = 30 * 1000, SAFE_RETRY = 3000, SAME_VERSION_PAUSE = 10 * 60 * 1000;
+  var RELOADED_KEY = 'rosh-reloaded-for';
+
   var registration = null;
-  if (location.protocol === 'https:' && !(me && me.getAttribute('data-sw') === 'off')) {
+  var hadController = !!(sw && sw.controller);   // בטעינה הראשונה אין — אז החלפה אינה "עדכון"
+  if (sw && location.protocol === 'https:' && !tool) {
     sw.register(new URL('sw.js', document.baseURI).href).then(function (reg) { registration = reg; }).catch(function () {});
   }
-
-  var lastCheck = Date.now();
-  document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState !== 'visible' || !registration) return;
-    if (Date.now() - lastCheck < 30 * 60 * 1000) return;
-    lastCheck = Date.now();
-    registration.update().catch(function () {});
-  });
-
-  var shown = false, waiting = null;
-  sw.addEventListener('controllerchange', function () {
+  if (sw) sw.addEventListener('controllerchange', function () {
     if (!hadController) { hadController = true; return; }
-    if (shown || waiting) return;
-    whenIdle();
+    reloadWhenSafe('sw');
   });
 
-  function playing() { return !!document.body && document.body.classList.contains('is-playing'); }
-  function whenIdle() {
-    if (!playing()) { show(); return; }
-    waiting = setInterval(function () {
-      if (playing()) return;
-      clearInterval(waiting); waiting = null;
-      show();
-    }, 5000);
+  var typed = false;
+  if (tool) document.addEventListener('input', function () { typed = true; }, true);
+
+  function playing() {
+    if (document.body && document.body.classList.contains('is-playing')) return true;
+    var media = document.querySelectorAll('audio, video');
+    for (var i = 0; i < media.length; i++) if (!media[i].paused && !media[i].ended) return true;
+    return false;
+  }
+  var TEXT = /^(text|search|email|url|tel|number|password|date|time|datetime-local|month|week)$/;
+  function typing() {
+    var el = document.activeElement;
+    if (!el) return false;
+    if (el.isContentEditable || el.tagName === 'TEXTAREA') return true;
+    return el.tagName === 'INPUT' && TEXT.test(el.type);
+  }
+  function held() {
+    var list = window.RoshBusy || [];
+    for (var i = 0; i < list.length; i++) { try { if (list[i]()) return true; } catch (e) { return true; } }
+    return tool && !list.length && typed;
+  }
+  function busy() { return playing() || typing() || !!document.querySelector('dialog[open]') || held(); }
+
+  function mayReload(version) {
+    try {
+      var last = JSON.parse(sessionStorage.getItem(RELOADED_KEY) || 'null');
+      if (last && last.v === version && Date.now() - (last.at || 0) < SAME_VERSION_PAUSE) return false;
+      sessionStorage.setItem(RELOADED_KEY, JSON.stringify({ v: version, at: Date.now() }));
+    } catch (e) { /* בלי sessionStorage — טוענים בכל זאת */ }
+    return true;
   }
 
-  var CSS = '' +
-    '.app-update{position:fixed;left:50%;bottom:calc(var(--dock-height,0px) + 16px);transform:translateX(-50%);z-index:95;' +
-    'display:flex;align-items:center;gap:10px;max-width:calc(100% - 32px);padding:8px;padding-inline-start:16px;' +
-    'background:var(--panel-solid,#121729);color:var(--text,#f4f1e8);border:1px solid var(--border,rgba(255,255,255,.09));' +
-    'border-radius:999px;box-shadow:0 12px 32px rgba(0,0,0,.35);font-size:14px;font-weight:600;line-height:1.3;font-family:inherit}' +
-    '.app-update span{min-width:0}' +
-    '.app-update button{font:inherit;cursor:pointer;border-radius:999px;border:1px solid var(--border,rgba(255,255,255,.09));background:transparent;color:inherit;padding:6px 12px;min-height:34px}' +
-    '.app-update .app-update-go{background:var(--gold,#f0c65a);border-color:var(--gold,#f0c65a);color:#16120a;font-weight:800}' +
-    '.app-update .app-update-x{padding:6px 10px;opacity:.8}' +
-    '.app-update button:hover{filter:brightness(1.08)}' +
-    '.app-update button:focus-visible{outline:2px solid var(--gold,#f0c65a);outline-offset:2px}';
-
-  function show() {
-    if (shown || !document.body) return;
-    shown = true;
-    if (!document.getElementById('app-update-css')) {
-      var st = document.createElement('style');
-      st.id = 'app-update-css';
-      st.textContent = CSS;
-      document.head.appendChild(st);
+  var waiting = 0, done = false;
+  function reloadWhenSafe(version) {
+    if (waiting || done) return;
+    function attempt() {
+      if (busy()) return;
+      clearInterval(waiting);
+      done = true;
+      if (mayReload(version)) location.reload();
     }
-    var bar = document.createElement('div');
-    bar.className = 'app-update';
-    bar.setAttribute('role', 'status');
-    bar.setAttribute('aria-live', 'polite');
-    var text = document.createElement('span');
-    text.textContent = 'האתר עודכן — לחצו לרענון';
-    var go = document.createElement('button');
-    go.type = 'button'; go.className = 'app-update-go'; go.textContent = 'רענון';
-    go.addEventListener('click', function () { location.reload(); });
-    var x = document.createElement('button');
-    x.type = 'button'; x.className = 'app-update-x'; x.textContent = '✕';
-    x.setAttribute('aria-label', 'סגירה');
-    x.addEventListener('click', function () { bar.remove(); });
-    bar.appendChild(text); bar.appendChild(go); bar.appendChild(x);
-    document.body.appendChild(bar);
+    waiting = setInterval(attempt, SAFE_RETRY);
+    attempt();
   }
 
-  // לבדיקות: RoshAppUpdate.show() מציג את הפס מיד
-  window.RoshAppUpdate = { show: show };
+  var lastCheck = 0;
+  function check(force) {
+    if (!current || waiting || done) return;
+    if (!force && Date.now() - lastCheck < MIN_GAP) return;
+    lastCheck = Date.now();
+    if (registration) registration.update().catch(function () {});
+    fetch(versionUrl, { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+      var v = d && typeof d.v === 'string' ? d.v : '';
+      if (v && v !== current) reloadWhenSafe(v);
+    }).catch(function () { /* בלי רשת — ננסה בפעם הבאה */ });
+  }
+  function soon() { if (document.visibilityState === 'visible') check(false); }
+  setInterval(function () { check(true); }, CHECK_EVERY);
+  document.addEventListener('visibilitychange', soon);
+  window.addEventListener('focus', soon);
+  window.addEventListener('online', soon);
+  window.addEventListener('pageshow', soon);
+
+  // לבדיקות: RoshAppUpdate.check() בודק מיד
+  window.RoshAppUpdate = { check: function () { check(true); } };
 })();

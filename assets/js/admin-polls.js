@@ -140,6 +140,8 @@
 
   /* ---------- חלון היצירה והעריכה ---------- */
   let E = null;   // { draft, isNew, dirty, mode: 'vote'|'results', device: 'desk'|'phone', target, epQuery }
+  // עדכון בכוח (app-update.js) מחכה כל עוד יש בעורך שינויים שלא נשמרו
+  (window.RoshBusy = window.RoshBusy || []).push(() => !!E?.dirty);
 
   function open(poll, preset) {
     const isNew = !poll;

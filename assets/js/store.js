@@ -103,7 +103,10 @@
     const survey = sv ? { id: String(sv.id || ''), name: String(sv.name || ''), open: !!sv.open, url: String(sv.url || '') } : null;
     const updates = (Array.isArray(raw?.updates) ? raw.updates : []).map((u, i) => ({
       id: String(u?.id || `u${i}`), date: String(u?.date || '').slice(0, 10), title: String(u?.title || ''), text: String(u?.text || ''), link: String(u?.link || ''), pinned: !!u?.pinned,
-    })).filter((u) => u.title || u.text);
+      // כפתורי קישור וקבצים מצורפים (העלאה לאחסון של אתר הסקר)
+      links: (Array.isArray(u?.links) ? u.links : []).slice(0, 6).map((l) => ({ label: String(l?.label || ''), url: String(l?.url || '') })),
+      files: (Array.isArray(u?.files) ? u.files : []).slice(0, 10).map((f) => ({ name: String(f?.name || ''), url: String(f?.url || ''), size: Number(f?.size) || 0, type: String(f?.type || '') })).filter((f) => f.url),
+    })).filter((u) => u.title || u.text || u.files.length);
     // פרטי הקשר בדף הבית — נערכים בניהול; כשלא נשמרו, הערכים שהיו באתר מאז ומעולם
     const c = raw?.contacts && typeof raw.contacts === 'object' ? raw.contacts : {};
     const contacts = { ...CONTACT_DEFAULTS };

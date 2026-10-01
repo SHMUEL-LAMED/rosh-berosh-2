@@ -11,12 +11,22 @@
   const PARALLEL = 4;                     // חלקים שעולים בבת אחת
   const ATTEMPTS = 6;                     // ניסיונות לכל בקשה (המתנה: 1, 2, 4, 8, 16 שניות)
   const STALL_MS = 45 * 1000;             // בלי התקדמות כל כך הרבה זמן — הבקשה מנותקת ומנוסה שוב
-  const MAX = { audio: 1024 * 1024 * 1024, cover: 15 * 1024 * 1024 };
+  const MAX = { audio: 1024 * 1024 * 1024, cover: 15 * 1024 * 1024, file: 200 * 1024 * 1024 };
   const RESUME_KEY = 'rosh:upload:resume'; // העלאות בחלקים שלא הושלמו, לפי קובץ
   const RESUME_MAX_AGE = 6 * 24 * 60 * 60 * 1000; // ותיקה יותר נשכחת ומבוטלת בשרת (כלל החיים של ה־bucket מוחק אחרי שבוע)
   const RETRY_NOTE = 'החיבור נקטע, מנסים שוב…';
 
   function types(kind) {
+    if (kind === 'file') {
+      // קבצים מצורפים לעדכונים (אותה רשימה כמו ATTACHMENT_EXT ב־worker/program-api.ts במאגר rosh-berosh)
+      return {
+        pdf: 'application/pdf', doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        xls: 'application/vnd.ms-excel', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ppt: 'application/vnd.ms-powerpoint', pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        zip: 'application/zip', txt: 'text/plain', csv: 'text/csv', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif',
+        mp3: 'audio/mpeg', m4a: 'audio/mp4', wav: 'audio/wav', mp4: 'video/mp4',
+      };
+    }
     return kind === 'audio'
       ? { mp3: 'audio/mpeg', m4a: 'audio/mp4', wav: 'audio/wav', ogg: 'audio/ogg', flac: 'audio/flac', aac: 'audio/aac' }
       : { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
@@ -156,16 +166,17 @@
     let admin = false;
     try { admin = await cf.isAdmin(); } catch { throw new Error('אין חיבור לשרת. בדקו את החיבור ונסו שוב.'); }
     if (!admin) throw new Error('יש להתחבר עם חשבון מנהל כדי להעלות קבצים.');
-    kind = kind === 'cover' ? 'cover' : 'audio';
+    kind = kind === 'cover' || kind === 'file' ? kind : 'audio';
     const ext = file.name.split('.').pop().toLowerCase();
     // הסוג שהקובץ מצהיר עליו קודם (PNG נשאר PNG גם אם השם לא מתאים), ואם אינו מוכר — לפי הסיומת
     const allowed = types(kind);
     const contentType = (file.type && Object.values(allowed).includes(file.type) ? file.type : '') || allowed[ext] || '';
     if (!contentType) throw new Error('סוג הקובץ אינו נתמך.');
     if (!file.size) throw new Error('הקובץ ריק.');
-    if (file.size > MAX[kind]) throw new Error(kind === 'audio' ? 'אפשר להעלות הקלטה של עד 1GB.' : 'אפשר להעלות תמונה של עד 15MB.');
+    if (file.size > MAX[kind]) throw new Error({ audio: 'אפשר להעלות הקלטה של עד 1GB.', cover: 'אפשר להעלות תמונה של עד 15MB.', file: 'אפשר לצרף קובץ של עד 200MB.' }[kind]);
     const token = cf.session.token;
-    const query = `episode=${encodeURIComponent(episodeId)}&kind=${kind}`;
+    // השם המקורי נשמר עם הקובץ המצורף — כך הוא נפתח או יורד בשמו
+    const query = `episode=${encodeURIComponent(episodeId)}&kind=${kind}${kind === 'file' ? `&name=${encodeURIComponent(file.name)}` : ''}`;
     progress(0);
 
     if (file.size <= SMALL) {

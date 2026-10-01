@@ -247,6 +247,25 @@ await page.waitForTimeout(300);
 await page.click('[data-op="update-add"]');
 await page.fill('#update-rows input[data-uf="title"] >> nth=0', 'עדכון ראשון');
 await page.fill('#update-rows textarea >> nth=0', 'תוכן העדכון');
+{
+  // קישור על מילה: מסמנים "העדכון" בטקסט, מקשרים לכתובת, ומוסיפים כפתור וקובץ מצורף
+  const row = page.locator('#update-rows .update-row').first();
+  await row.locator('textarea').evaluate((ta) => { ta.focus(); ta.setSelectionRange(5, 11); });
+  await row.locator('[data-op="update-linker"]').click();
+  check((await row.locator('[data-linker="text"]').inputValue()) === 'העדכון', 'קישור על מילה: הטקסט המסומן נכנס לחלון הקישור');
+  await row.locator('[data-linker="url"]').fill('example.com/more');
+  await row.locator('[data-op="update-linker-apply"]').click();
+  check((await row.locator('textarea').inputValue()) === 'תוכן [העדכון](https://example.com/more)', 'קישור על מילה נכנס לטקסט (https:// נוסף לבד)');
+  check((await row.locator('[data-update-preview] .update-link').getAttribute('href')) === 'https://example.com/more', 'התצוגה המקדימה מציגה את המילה כקישור');
+  await row.locator('[data-op="update-btn-add"]').click();
+  await row.locator('[data-ulink="label"]').fill('להרשמה');
+  await row.locator('[data-ulink="url"]').fill('https://example.com/join');
+  await page.route(`${API}/api/program/upload?*kind=file*`, (route) => route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ url: `${API}/media/program/u-1/file.pdf` }) }));
+  await row.locator('input[data-update-file]').setInputFiles({ name: 'לוח שידורים.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4') });
+  await row.locator('[data-ufile="name"]').waitFor();
+  check((await row.locator('[data-ufile="name"]').inputValue()) === 'לוח שידורים' && (await row.locator('[data-update-preview] .update-file').count()) === 1, 'קובץ מצורף עלה ומופיע בתצוגה המקדימה');
+  if (process.env.SHOTS) await row.screenshot({ path: `${process.env.SHOTS}/update-editor.png` });
+}
 await page.click('[data-op="season-add"]');
 check((await page.locator('#season-rows .season-row').count()) === 6, 'עונה חדשה נוספה');
 {
@@ -418,6 +437,10 @@ check(events.some((e) => e.kind === 'play'), 'אירוע האזנה נשלח ל�
 await page.goto(`${BASE}/updates.html`);
 await page.waitForSelector('.update');
 check((await page.locator('.update h2').innerText()) === 'עדכון ראשון', 'דף העדכונים מציג את העדכון');
+check((await page.locator('.update .update-link').getAttribute('href')) === 'https://example.com/more' && (await page.locator('.update .update-link').innerText()) === 'העדכון', 'דף העדכונים: מילה עם קישור');
+check((await page.locator('.update .update-file').getAttribute('href')) === `${API}/media/program/u-1/file.pdf` && (await page.locator('.update .update-file-name').innerText()) === 'לוח שידורים', 'דף העדכונים: הקובץ המצורף');
+check((await page.locator('.update .update-actions .btn').innerText()).includes('להרשמה'), 'דף העדכונים: כפתור הקישור');
+if (process.env.SHOTS) await page.locator('.update').first().screenshot({ path: `${process.env.SHOTS}/update-page.png` });
 check((await page.locator('.update.is-new .new-tag').count()) === 1, 'בדף העדכונים: העדכון החדש מסומן "חדש"');
 await page.goto(`${BASE}/index.html`);
 await page.waitForSelector('#featured .card');

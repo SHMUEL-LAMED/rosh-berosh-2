@@ -1719,7 +1719,7 @@ ${window.RoshPollAdmin?.siteCard() || ''}
 <div class="card">
   <div class="section-title"><div><p class="kicker">דף העדכונים</p><h2>מה חדש</h2></div><strong>${ups.length}</strong></div>
   <div class="card-body">
-    <p class="help">הודעות קצרות למאזינים בדף "עדכונים" באתר (הקישור מופיע בתפריט כשיש עדכונים). החדש ביותר למעלה; אפשר לנעוץ עדכון חשוב.</p>
+    <p class="help">הודעות למאזינים בדף "עדכונים" באתר (הקישור מופיע בתפריט כשיש עדכונים). החדש ביותר למעלה; אפשר לנעוץ עדכון חשוב. בכל עדכון אפשר להפוך מילה לקישור (לכתובת או לקובץ), להדגיש, לצרף קבצים (PDF, Word, תמונות ועוד — עד 200MB) ולהוסיף כפתורי קישור.</p>
     <div class="update-rows" id="update-rows">${renderUpdates(ups)}</div>
     <div class="track-tools"><button type="button" class="btn gold" data-op="update-add">+ עדכון חדש</button></div>
   </div>
@@ -1753,14 +1753,175 @@ ${window.RoshPollAdmin?.siteCard() || ''}
 </div>`;
     window.RoshPollAdmin?.afterSite();
   }
+  /* ---------- עורך העדכונים ----------
+     הטקסט נשמר בסימון פשוט ([מילה](כתובת), **מודגש**) ומצויר באתר ב־RoshUI.updateText. לכל עדכון:
+     סרגל (קישור על מילה מסומנת, הדגשה, צירוף קובץ), קבצים מצורפים (עולים לאחסון של אתר הסקר),
+     כפתורי קישור ותצוגה מקדימה שמתעדכנת בזמן הקלדה. פעולות שמסתיימות אחרי העלאה מוצאות את העדכון
+     לפי המזהה שלו, כי הסדר יכול להשתנות בינתיים. */
+  const updById = (id) => (A.data.settings.updates || []).find((u) => u.id === id);
+  const updRow = (id) => P.querySelector(`.update-row[data-uid="${CSS.escape(id)}"]`);
+  /** הכפתורים של העדכון; קישור ישן (שדה link) הופך לכפתור "לפרטים" כשעורכים אותם */
+  const updLinks = (u) => (u.links?.length ? u.links : u.link ? [{ label: 'לפרטים', url: u.link }] : []);
+  function ownLinks(u) { if (!u.links?.length) u.links = u.link ? [{ label: 'לפרטים', url: u.link }] : []; u.link = ''; return u.links; }
   function renderUpdates(ups) {
     if (!ups.length) return '<div class="state" style="padding:20px"><p>עדיין אין עדכונים.</p></div>';
     return ups.map((u, i) => `
-<div class="update-row${u.pinned ? ' pinned' : ''}" data-i="${i}">
+<div class="update-row${u.pinned ? ' pinned' : ''}" data-i="${i}" data-uid="${esc(u.id)}">
   <div class="update-head"><input data-uf="date" data-i="${i}" type="date" value="${esc(u.date)}" aria-label="תאריך" class="ltr"><input data-uf="title" data-i="${i}" value="${esc(u.title)}" placeholder="כותרת" aria-label="כותרת"><button type="button" class="chip" data-op="update-pin" data-i="${i}" aria-pressed="${!!u.pinned}">${u.pinned ? '📌 נעוץ' : 'נעיצה'}</button><button type="button" class="icon-btn del" data-op="update-del" data-i="${i}" aria-label="מחיקת העדכון">✕</button></div>
-  <textarea data-uf="text" data-i="${i}" placeholder="תוכן העדכון" aria-label="תוכן">${esc(u.text)}</textarea>
-  <input data-uf="link" data-i="${i}" value="${esc(u.link || '')}" placeholder="קישור (לא חובה)" aria-label="קישור" class="ltr">
+  <div class="update-toolbar" role="toolbar" aria-label="עיצוב העדכון">
+    <button type="button" class="chip" data-op="update-linker" data-i="${i}" title="סמנו מילה בטקסט ולחצו">🔗 קישור על מילה</button>
+    <button type="button" class="chip" data-op="update-bold" data-i="${i}" title="סמנו מילים ולחצו"><b>מודגש</b></button>
+    <label class="chip update-attach">📎 צירוף קובץ<input type="file" data-update-file="${esc(u.id)}" multiple hidden></label>
+    <span class="cue-hint">סמנו מילה בטקסט ולחצו "קישור" — אפשר לקשר אותה לכתובת או לקובץ.</span>
+  </div>
+  <textarea data-uf="text" data-i="${i}" placeholder="תוכן העדכון. כתובת שמדביקים הופכת לקישור לבד." aria-label="תוכן">${esc(u.text)}</textarea>
+  <div data-linker-slot="${esc(u.id)}"></div>
+  <span class="upload-status" role="status" data-update-status="${esc(u.id)}"></span>
+  <div data-update-files="${esc(u.id)}">${renderUpdateFiles(u)}</div>
+  <div data-update-links="${esc(u.id)}">${renderUpdateLinks(u)}</div>
+  <details class="update-preview" ${u.text || u.files?.length ? 'open' : ''}><summary>כך זה ייראה באתר</summary><div data-update-preview="${esc(u.id)}">${updatePreview(u)}</div></details>
 </div>`).join('');
+  }
+  function renderUpdateFiles(u) {
+    const files = u.files || [];
+    if (!files.length) return '';
+    return `<div class="update-attachments"><span class="update-sub">קבצים מצורפים</span>${files.map((f, j) => `
+<div class="update-attachment"><input data-ufile="name" data-uid="${esc(u.id)}" data-j="${j}" value="${esc(f.name)}" aria-label="שם הקובץ באתר" placeholder="שם הקובץ"><small>${esc(U.fmtSize(f.size))}</small><a class="chip" href="${esc(f.url)}" target="_blank" rel="noopener">פתיחה</a><button type="button" class="chip" data-op="update-file-word" data-uid="${esc(u.id)}" data-j="${j}" title="סמנו מילה בטקסט ולחצו">🔗 על המילה המסומנת</button><button type="button" class="icon-btn del" data-op="update-file-del" data-uid="${esc(u.id)}" data-j="${j}" aria-label="הסרת הקובץ">✕</button></div>`).join('')}</div>`;
+  }
+  function renderUpdateLinks(u) {
+    const links = updLinks(u);
+    return `<div class="update-buttons"><span class="update-sub">כפתורי קישור${links.length ? '' : ' (לא חובה)'}</span>${links.map((l, j) => `
+<div class="update-button-row"><input data-ulink="label" data-uid="${esc(u.id)}" data-j="${j}" value="${esc(l.label)}" placeholder="כיתוב, למשל: להרשמה" aria-label="כיתוב הכפתור" maxlength="80"><input data-ulink="url" data-uid="${esc(u.id)}" data-j="${j}" value="${esc(l.url)}" placeholder="https://…" aria-label="כתובת הכפתור" class="ltr"><button type="button" class="icon-btn del" data-op="update-btn-del" data-uid="${esc(u.id)}" data-j="${j}" aria-label="הסרת הכפתור">✕</button></div>`).join('')}
+<button type="button" class="btn small" data-op="update-btn-add" data-uid="${esc(u.id)}">+ כפתור קישור</button></div>`;
+  }
+  function updatePreview(u) {
+    const body = `${u.title ? `<h2>${esc(u.title)}</h2>` : ''}${u.text ? `<div class="update-text">${U.updateText(u.text)}</div>` : ''}${U.updateExtras(u)}`;
+    const bad = [...String(u.text || '').matchAll(/\[([^\]\n]{1,300})\]\(([^)\s]{1,1000})\)/g)].filter((m) => !U.updateUrl(m[2])).map((m) => m[1]);
+    const badBtn = updLinks(u).filter((l) => l.url && !U.updateUrl(l.url)).map((l) => l.label || l.url);
+    const warn = [...bad, ...badBtn].length ? `<p class="update-warn">⚠ הכתובת לא תקינה ולא תהיה קישור: ${esc([...bad, ...badBtn].join(', '))}. כתובת מתחילה ב־https://</p>` : '';
+    return body ? `${warn}<article class="card update">${body}</article>` : '<p class="cue-hint">כתבו כותרת או תוכן כדי לראות איך זה ייראה.</p>';
+  }
+  function paintUpdate(id, parts = ['files', 'links', 'preview']) {
+    const u = updById(id), row = updRow(id); if (!u || !row) return;
+    if (parts.includes('files')) row.querySelector('[data-update-files]').innerHTML = renderUpdateFiles(u);
+    if (parts.includes('links')) row.querySelector('[data-update-links]').innerHTML = renderUpdateLinks(u);
+    if (parts.includes('preview')) { const pv = row.querySelector('[data-update-preview]'); pv.innerHTML = updatePreview(u); if (u.text || u.files?.length) pv.closest('details').open = true; }
+  }
+  /** מחליף את הטקסט המסומן בתיבת התוכן; בלי סימון — מוסיף בסוף. הטיוטה מתעדכנת כמו בהקלדה. */
+  function replaceSelection(ta, start, end, text) {
+    ta.focus();
+    ta.setRangeText(text, start, end, 'end');
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  /** חלון קטן מתחת לתיבת התוכן: הטקסט של הקישור, והיעד — כתובת, קובץ שכבר מצורף או קובץ חדש */
+  function openLinker(id, preset = {}) {
+    const u = updById(id), row = updRow(id); if (!u || !row) return;
+    const ta = row.querySelector('textarea[data-uf="text"]'), slot = row.querySelector('[data-linker-slot]');
+    const start = ta.selectionStart ?? ta.value.length, end = ta.selectionEnd ?? start;
+    const selected = ta.value.slice(start, end).replace(/^\s+|\s+$/g, '');
+    const md = ta.value.slice(start, end).match(/^\[([^\]]*)\]\(([^)]*)\)$/);   // סימנו קישור קיים — עורכים אותו
+    const files = u.files || [];
+    slot.innerHTML = `
+<div class="update-linker" data-start="${start}" data-end="${end}">
+  <div class="update-linker-grid">
+    <label class="field"><span>הטקסט שיהיה קישור</span><input data-linker="text" value="${esc(preset.text ?? (md ? md[1] : selected))}" placeholder="למשל: לחצו כאן"></label>
+    <label class="field"><span>לאן הקישור מוביל</span><input data-linker="url" class="ltr" value="${esc(preset.url ?? (md ? md[2] : ''))}" placeholder="https://…"></label>
+  </div>
+  <div class="update-linker-files">
+    ${files.length ? `<span class="cue-hint">או קובץ מצורף:</span>${files.map((f, j) => `<button type="button" class="chip" data-op="update-linker-file" data-uid="${esc(id)}" data-j="${j}">📎 ${esc(f.name || 'קובץ')}</button>`).join('')}` : ''}
+    <label class="chip update-attach">⬆ העלאת קובץ לקישור<input type="file" data-linker-upload="${esc(id)}" hidden></label>
+    <span class="upload-status" role="status" data-linker-status></span>
+  </div>
+  <div class="actions" style="margin:0"><button type="button" class="btn gold small" data-op="update-linker-apply" data-uid="${esc(id)}">${md ? 'עדכון הקישור' : 'הוספת הקישור'}</button><button type="button" class="btn ghost small" data-op="update-linker-close" data-uid="${esc(id)}">ביטול</button>${md ? `<button type="button" class="btn ghost small" data-op="update-linker-unlink" data-uid="${esc(id)}">הסרת הקישור</button>` : ''}</div>
+</div>`;
+    slot.querySelector(selected || md ? '[data-linker="url"]' : '[data-linker="text"]').focus();
+  }
+  function applyLinker(id, unlink = false) {
+    const row = updRow(id); if (!row) return;
+    const box = row.querySelector('.update-linker'); if (!box) return;
+    const ta = row.querySelector('textarea[data-uf="text"]');
+    const text = box.querySelector('[data-linker="text"]').value.replace(/[\[\]\n]+/g, ' ').trim();
+    let url = box.querySelector('[data-linker="url"]').value.trim();
+    if (!unlink) {
+      if (!text) { U.notify('כתבו את הטקסט שיהיה קישור.', 'info'); box.querySelector('[data-linker="text"]').focus(); return; }
+      if (url && !/^[a-z][a-z0-9+.-]*:|^[/.#]|\.html\b/i.test(url)) url = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(url) ? `mailto:${url}` : `https://${url}`;   // www.… או כתובת מייל
+      if (!U.updateUrl(url)) { U.notify('הכתובת לא תקינה. היא צריכה להתחיל ב־https://', 'error'); box.querySelector('[data-linker="url"]').focus(); return; }
+    }
+    replaceSelection(ta, Number(box.dataset.start), Number(box.dataset.end), unlink ? text : `[${text}](${url.replace(/\s/g, '%20').replace(/\)/g, '%29')})`);
+    row.querySelector('[data-linker-slot]').innerHTML = '';
+  }
+  function boldSelection(id) {
+    const row = updRow(id); if (!row) return;
+    const ta = row.querySelector('textarea[data-uf="text"]');
+    const start = ta.selectionStart, end = ta.selectionEnd, sel = ta.value.slice(start, end);
+    if (!sel.trim()) { U.notify('סמנו קודם את המילים שרוצים להדגיש.', 'info'); ta.focus(); return; }
+    const m = sel.match(/^\*\*([\s\S]*)\*\*$/);
+    replaceSelection(ta, start, end, m ? m[1] : `**${sel.trim()}**`);
+  }
+  /** מעלה קבצים לעדכון. מחזיר את הקבצים שעלו (כדי לקשר מילה לקובץ אחרי ההעלאה). */
+  async function uploadUpdateFiles(id, list, statusEl) {
+    const out = [];
+    const status = (text) => { const el = statusEl || updRow(id)?.querySelector('[data-update-status]'); if (el) el.textContent = text; };
+    for (const file of list) {
+      if ((updById(id)?.files || []).length >= 10) { U.notify('אפשר לצרף עד 10 קבצים לעדכון.', 'info'); break; }
+      A.uploads++;
+      try {
+        status(`מעלים את ${file.name}…`);
+        const url = await window.RoshUpload(file, id, 'file', (pct, note) => status(note ? `${note} ${pct}%` : `מעלים את ${file.name} — ${pct}%`));
+        const u = updById(id); if (!u) throw new Error('העדכון נמחק בזמן ההעלאה.');
+        const f = { name: file.name.replace(/\.[^.]+$/, ''), url, size: file.size, type: file.type || '' };
+        (u.files || (u.files = [])).push(f); out.push(f);
+        touch(); paintUpdate(id, ['files', 'preview']);
+        status('');
+      } catch (err) { status(err.message); U.notify(err.message, 'error'); }
+      finally { A.uploads--; if (!A.uploads && A.tab === 'publish') renderPublish(); }
+    }
+    if (out.length) U.notify(out.length === 1 ? 'הקובץ צורף. כשתלחצו פרסום, הוא יופיע באתר.' : `${out.length} קבצים צורפו. כשתלחצו פרסום, הם יופיעו באתר.`, 'success');
+    return out;
+  }
+  /** אירועי העורך — מחזיר true כשהאירוע טופל כאן */
+  function updateEditorEvent(ev) {
+    const t = ev.target;
+    if (ev.type === 'input') {
+      if (t.dataset.ulink || t.dataset.ufile) {
+        const u = updById(t.dataset.uid); if (!u) return true;
+        if (t.dataset.ulink) { const l = ownLinks(u)[Number(t.dataset.j)]; if (l) l[t.dataset.ulink] = t.value; }
+        else { const f = u.files?.[Number(t.dataset.j)]; if (f) f.name = t.value; }
+        touch(); paintUpdate(u.id, ['preview']); return true;
+      }
+      if (t.dataset.uf === 'text' || t.dataset.uf === 'title') { const id = t.closest('.update-row')?.dataset.uid; if (id) queueMicrotask(() => paintUpdate(id, ['preview'])); }
+      return false;
+    }
+    if (ev.type === 'change') {
+      if (t.dataset.updateFile) { const files = [...t.files]; t.value = ''; uploadUpdateFiles(t.dataset.updateFile, files); return true; }
+      if (t.dataset.linkerUpload) {
+        const id = t.dataset.linkerUpload, file = t.files[0]; t.value = ''; if (!file) return true;
+        const box = t.closest('.update-linker');
+        uploadUpdateFiles(id, [file], box.querySelector('[data-linker-status]')).then(([f]) => {
+          if (!f || !box.isConnected) return;
+          box.querySelector('[data-linker="url"]').value = f.url;
+          const txt = box.querySelector('[data-linker="text"]'); if (!txt.value.trim()) txt.value = f.name;
+        });
+        return true;
+      }
+      return false;
+    }
+    const b = t.closest('[data-op]'); if (!b) return false;
+    const op = b.dataset.op, id = b.dataset.uid || b.closest('.update-row')?.dataset.uid, j = Number(b.dataset.j);
+    const u = id && updById(id);
+    switch (op) {
+      case 'update-linker': if (u) openLinker(u.id); return true;
+      case 'update-bold': if (u) boldSelection(u.id); return true;
+      case 'update-linker-apply': applyLinker(id); return true;
+      case 'update-linker-unlink': applyLinker(id, true); return true;
+      case 'update-linker-close': { const slot = updRow(id)?.querySelector('[data-linker-slot]'); if (slot) slot.innerHTML = ''; return true; }
+      case 'update-linker-file': { const f = u?.files?.[j], box = updRow(id)?.querySelector('.update-linker'); if (f && box) { box.querySelector('[data-linker="url"]').value = f.url; const txt = box.querySelector('[data-linker="text"]'); if (!txt.value.trim()) txt.value = f.name; } return true; }
+      case 'update-file-word': { const f = u?.files?.[j]; if (f) openLinker(id, { url: f.url }); return true; }
+      case 'update-file-del': if (u?.files?.[j] && confirm(`להסיר את "${u.files[j].name || 'הקובץ'}" מהעדכון?`)) { u.files.splice(j, 1); touch(); paintUpdate(id); } return true;
+      case 'update-btn-add': if (u) { const links = ownLinks(u); if (links.length >= 6) { U.notify('אפשר עד 6 כפתורים בעדכון.', 'info'); return true; } links.push({ label: '', url: '' }); touch(); paintUpdate(id, ['links']); updRow(id)?.querySelector(`[data-ulink="label"][data-j="${links.length - 1}"]`)?.focus(); } return true;
+      case 'update-btn-del': if (u) { ownLinks(u).splice(j, 1); touch(); paintUpdate(id, ['links', 'preview']); } return true;
+      default: return false;
+    }
   }
   function renderSeasonRows() {
     const counts = {}; A.data.episodes.forEach((e) => { counts[e.season] = (counts[e.season] || 0) + 1; });
@@ -2438,6 +2599,7 @@ ${proofCard()}
 
   P.addEventListener('input', (ev) => {
     const t = ev.target;
+    if (updateEditorEvent(ev)) return;
     if (t.dataset.adStart != null || t.dataset.adEnd != null) {
       const field = t.dataset.adStart != null ? 'start' : 'end';
       const index = Number(t.dataset.adStart ?? t.dataset.adEnd);
@@ -2481,6 +2643,7 @@ ${proofCard()}
 
   P.addEventListener('change', async (ev) => {
     const t = ev.target;
+    if (updateEditorEvent(ev)) return;
     if (t.id === 'ads-episode') { A.ads.episodeId = t.value; A.ads.ranges = (A.ads.suggestions || []).filter((x) => x.episodeId === t.value).map((x) => ({ ...x, checked: false })); renderAds(); return; }
     if (t.dataset.adCheck != null) { const range = A.ads.ranges[Number(t.dataset.adCheck)]; if (range) range.checked = t.checked; P.querySelector('[data-op="ads-cut"]').disabled = !A.ads.ranges.some((x) => x.checked); return; }
     if (t.id === 'ep-filter') { A.filter = t.value; renderList(); return; }
@@ -2583,6 +2746,7 @@ ${proofCard()}
       else select(item.dataset.id);
       return;
     }
+    if (updateEditorEvent(ev)) return;
     const b = ev.target.closest('[data-op]'); if (!b || b.tagName === 'SELECT') return;
     const op = b.dataset.op, i = Number(b.dataset.i), e = cur();
     switch (op) {
@@ -2665,7 +2829,7 @@ ${proofCard()}
       case 'ai-transcript': if (e) { const st = A.ai.get(e.id) || {}; A.ai.set(e.id, st); if (st.transcript != null) { st.transcript = null; paintAi(); break; } try { const r = await S.sb.call(`/api/program/ai/transcript/${encodeURIComponent(e.id)}`); st.transcript = r.text || ''; if (!st.summary && r.summary) st.summary = r.summary; } catch (err) { st.transcript = ''; st.error = err.status === 404 ? 'עדיין אין תמלול לתוכנית הזו.' : err.message; } paintAi(); } break;
       // האתר
       case 'banner-toggle': { const bn = A.data.settings.banner || (A.data.settings.banner = {}); bn.enabled = !bn.enabled; if (bn.enabled && !bn.text) { U.notify('כתבו קודם את ההודעה.', 'info'); bn.enabled = false; } touch(); renderSite(); break; }
-      case 'update-add': A.data.settings.updates.unshift({ id: `u-${Date.now().toString(36)}`, date: S.todayIL(), title: '', text: '', link: '', pinned: false }); touch(); $('#update-rows').innerHTML = renderUpdates(A.data.settings.updates); $('#update-rows input[data-uf="title"]')?.focus(); break;
+      case 'update-add': A.data.settings.updates.unshift({ id: `u-${Date.now().toString(36)}`, date: S.todayIL(), title: '', text: '', link: '', pinned: false, links: [], files: [] }); touch(); $('#update-rows').innerHTML = renderUpdates(A.data.settings.updates); $('#update-rows input[data-uf="title"]')?.focus(); break;
       case 'update-pin': { const u = A.data.settings.updates[i]; if (u) { u.pinned = !u.pinned; touch(); $('#update-rows').innerHTML = renderUpdates(A.data.settings.updates); } break; }
       case 'update-del': if (confirm('למחוק את העדכון?')) { A.data.settings.updates.splice(i, 1); touch(); renderSite(); } break;
       case 'season-add': { const y = new Date().getFullYear(); A.data.seasons.push({ id: uniqueSeasonId(String(y)), title: `עונת ${y}`, year: y, note: '' }); touch(); $('#season-rows').innerHTML = renderSeasonRows(); $$('#season-rows input[data-zf="title"]').pop()?.select(); break; }

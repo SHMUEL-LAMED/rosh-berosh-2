@@ -35,6 +35,23 @@ assert.equal(streamUrl({audio:'javascript:alert(1)'}),'');
 assert.equal(streamUrl({audio:'',links:[{label:'x',url:'https://example.com'}]}),'');
 assert(isDriveUrl('https://drive.google.com/file/d/abc/view')&&isDriveUrl('https://docs.google.com/uc?id=abc')&&!isDriveUrl('https://example.com'));
 assert.deepEqual(publicLinks({links:[{label:'d',url:'https://drive.google.com/file/d/abc/view'},{label:'x',url:'https://example.com'}]}).map(l=>l.label),['x']);
+// Updates: a word can link to an address or a file, **bold**, bare addresses become links,
+// and nothing unsafe ever becomes a link or raw HTML.
+{
+ const {updateText, updateExtras, updateUrl, updatePlain} = sandbox.window.RoshUI;
+ const html = updateText('שלום [להרשמה](https://example.com/a?b=1&c=2) ו**חשוב**\nשורה שנייה https://site.test/x.\n\nפסקה <script>alert(1)</script>');
+ assert.match(html, /^<p>שלום <a class="update-link" href="https:\/\/example\.com\/a\?b=1&amp;c=2" target="_blank" rel="noopener">להרשמה<\/a> ו<strong>חשוב<\/strong><br>שורה שנייה <a class="update-link" href="https:\/\/site\.test\/x" target="_blank" rel="noopener" dir="ltr">site\.test\/x<\/a>\.<\/p><p>פסקה &lt;script&gt;/);
+ assert.doesNotMatch(updateText('[x](javascript:alert(1)) [y](//evil.test) [z](data:text/html,1)'), /<a /, 'unsafe targets stay plain text');
+ assert.match(updateText('[q](" onmouseover="x)'), /^<p>\[q\]\(&quot;/);
+ assert.match(updateText('[טופס](updates.html) [מייל](mailto:a@b.co) [קובץ](https://w.dev/media/program/u-1/a.pdf)'), /href="updates\.html">טופס<\/a>.*href="mailto:a@b\.co">מייל<\/a>.*href="https:\/\/w\.dev\/media\/program\/u-1\/a\.pdf" target="_blank"/);
+ assert.equal(updateUrl('javascript:alert(1)'), '');
+ assert.equal(updatePlain('ראו [כאן](https://x.test) **עכשיו**'), 'ראו כאן עכשיו');
+ const extras = updateExtras({ links: [{ label: 'להרשמה', url: 'https://x.test' }, { label: 'רע', url: 'javascript:1' }], files: [{ name: 'לוח שידורים', url: 'https://w.dev/media/program/u-1/a.pdf', size: 2.5 * 1024 * 1024 }, { name: 'רע', url: 'javascript:1' }] });
+ assert.match(extras, /class="update-file" href="https:\/\/w\.dev\/media\/program\/u-1\/a\.pdf"[^>]*>.*📄.*לוח שידורים.*PDF · 2\.5 MB/);
+ assert.equal((extras.match(/class="update-file"/g) || []).length, 1);
+ assert.equal((extras.match(/class="btn small/g) || []).length, 1, 'the unsafe button is dropped');
+ assert.match(updateExtras({ link: 'updates.html' }), /href="updates\.html">לפרטים/, 'the old single link still shows');
+}
 // The public pages never mention the storage provider.
 for(const f of ['assets/js/home.js','assets/js/archive.js','assets/js/episode.js','assets/js/me.js','assets/js/player.js','index.html','archive.html','episode.html','me.html']){
  const src=fs.readFileSync(f,'utf8').replace(/\/\*[\s\S]*?\*\//g,'').replace(/^\s*\/\/.*$/gm,'');

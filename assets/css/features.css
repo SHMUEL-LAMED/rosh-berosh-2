@@ -220,6 +220,8 @@ body.pip-open .dock [data-pip] { color: var(--gold); }
 .news-item h3 { margin: 0; font-size: 18px; color: var(--text-strong); }
 .news-item p { margin: 0; color: var(--text-2); line-height: 1.7; white-space: pre-line; }
 .news-item .btn { justify-self: start; margin-top: 4px; }
+.news-item .update-files { margin-top: 6px; }
+.news-item .update-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
 .news-foot { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
 .whats-new.closing .news-card { animation: news-out .28s var(--ease) both; }
 @keyframes news-in { from { opacity: 0; transform: translateY(12px) scale(.98); } }

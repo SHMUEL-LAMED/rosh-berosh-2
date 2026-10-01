@@ -212,8 +212,8 @@
     <article class="news-item">
       <time datetime="${esc(u.date)}">${esc(U.fmtDate(u.date) || '')}</time>
       ${u.title ? `<h3>${esc(u.title)}</h3>` : ''}
-      ${u.text ? `<p>${esc(u.text.length > 220 ? `${u.text.slice(0, 220).trim()}…` : u.text)}</p>` : ''}
-      ${u.link ? `<a class="btn small" href="${esc(u.link)}" ${/^https?:/.test(u.link) ? 'target="_blank" rel="noopener"' : ''}>לפרטים <span>←</span></a>` : ''}
+      ${u.text ? (U.updatePlain(u.text).length > 220 ? `<p>${esc(`${U.updatePlain(u.text).slice(0, 220).trim()}…`)}</p>` : `<div class="update-text">${U.updateText(u.text)}</div>`) : ''}
+      ${U.updateExtras(u)}
     </article>`).join('')}</div>
   <div class="news-foot"><a class="btn" href="updates.html" data-news-all>לכל העדכונים <span>←</span></a><button type="button" class="btn ghost" data-news-close>הבנתי</button></div>
 </div>`;

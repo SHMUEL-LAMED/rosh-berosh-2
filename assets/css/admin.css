@@ -203,6 +203,24 @@ dialog.sheet.wide { width: min(860px, calc(100% - 32px)); }
 .update-row input, .update-row textarea { min-height: 36px; padding: 6px 9px; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--field-bg); color: var(--text-strong); font: inherit; font-size: 13px; }
 .update-row textarea { min-height: 70px; resize: vertical; line-height: 1.5; }
 .update-row input:focus, .update-row textarea:focus { outline: none; border-color: var(--gold); }
+.update-row textarea[data-uf="text"] { min-height: 110px; }
+.update-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.update-toolbar .cue-hint { font-size: 12px; }
+.update-attach { cursor: pointer; }
+.update-attach:focus-within { outline: 2px solid var(--gold); outline-offset: 2px; }
+.update-sub { display: block; font-size: 12px; font-weight: 800; color: var(--text-2); margin-bottom: 4px; }
+.update-attachments, .update-buttons { display: grid; gap: 6px; }
+.update-buttons > .btn { justify-self: start; }
+.update-attachment { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto auto; gap: 6px; align-items: center; }
+.update-attachment small { color: var(--text-2); font-size: 12px; white-space: nowrap; }
+.update-button-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto; gap: 6px; }
+.update-linker { display: grid; gap: 10px; padding: 12px; border: 1px solid rgb(var(--gold-rgb) / .5); border-radius: 14px; background: rgb(var(--gold-rgb) / .06); }
+.update-linker-grid { display: grid; grid-template-columns: 1fr 1.4fr; gap: 8px; }
+.update-linker-files { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.update-preview > summary { cursor: pointer; font-size: 12px; font-weight: 800; color: var(--text-2); }
+.update-preview .update { margin-top: 8px; }
+.update-preview .update h2 { font-size: 28px; }
+.update-warn { margin: 6px 0 0; font-size: 13px; font-weight: 700; color: var(--danger, #ff8a8a); }
 .admin-stats { margin: 0; }
 .admin-stats .stat b { font-size: clamp(40px, 5vw, 64px); }
 .admin-stats.six { grid-template-columns: repeat(3, 1fr); }
@@ -258,6 +276,9 @@ dialog.sheet.wide { width: min(860px, calc(100% - 32px)); }
   .two-col { grid-template-columns: 1fr; }
   .update-head { grid-template-columns: 1fr 1fr; }
   .update-head input[data-uf="title"] { grid-column: 1 / -1; }
+  .update-attachment { grid-template-columns: minmax(0, 1fr) auto auto; }
+  .update-attachment input { grid-column: 1 / -1; }
+  .update-button-row, .update-linker-grid { grid-template-columns: 1fr; }
   .bars .bar:nth-child(even) small { visibility: hidden; }
 }
 

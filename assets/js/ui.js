@@ -196,6 +196,67 @@
     return (window.RoshStore?.settings?.updates || []).filter((u) => recentUpdate(u) && !seen.has(u.id))
       .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   }
+  /* ---------- תוכן של עדכון ----------
+     הטקסט נכתב בניהול בסימון פשוט: [מילה](כתובת) — קישור על מילה, **מודגש**, וכתובת גלויה הופכת
+     לקישור לבד. שורה ריקה מפרידה פסקאות. מתחת לטקסט: כפתורי קישור וקבצים מצורפים.
+     אותו קוד מצייר את דף העדכונים, את "מה חדש" בדף הבית ואת התצוגה המקדימה בניהול. */
+  /** כתובת שמותר לקשר אליה: http(s), mailto:, tel: או דף באתר. אחרת — '' (בלי javascript: וכדומה) */
+  function updateUrl(raw) {
+    const url = String(raw || '').trim();
+    if (!url || /^\/\//.test(url)) return '';
+    if (/^(mailto|tel):/i.test(url)) return url;
+    if (/^[a-z][a-z0-9+.-]*:/i.test(url)) { try { const u = new URL(url); return /^https?:$/.test(u.protocol) && u.hostname ? u.href : ''; } catch { return ''; } }
+    return /^(\/|\.\/|#|[\w-]+\.html\b)/.test(url) ? url : '';
+  }
+  const external = (url) => /^https?:/i.test(url);
+  const linkAttrs = (url) => `href="${esc(url)}"${external(url) ? ' target="_blank" rel="noopener"' : ''}`;
+  const TAIL = /[.,;:!?)\]}״׳'"]+$/;
+  /** הטקסט של עדכון כ־HTML בטוח: פסקאות, שורות, קישורים על מילים, הדגשה וכתובות גלויות */
+  function updateText(text) {
+    const inline = (line) => {
+      let out = '', last = 0;
+      const re = /\[([^\]\n]{1,300})\]\(([^)\s]{1,1000})\)|\*\*([^*\n]{1,500})\*\*|(https?:\/\/[^\s<>"]+)/g;
+      for (let m; (m = re.exec(line));) {
+        out += esc(line.slice(last, m.index)); last = re.lastIndex;
+        if (m[1] != null) {
+          const url = updateUrl(m[2]);
+          out += url ? `<a class="update-link" ${linkAttrs(url)}>${esc(m[1])}</a>` : esc(m[0]);
+        } else if (m[3] != null) out += `<strong>${esc(m[3])}</strong>`;
+        else {
+          const tail = m[4].match(TAIL)?.[0] || '', raw = m[4].slice(0, m[4].length - tail.length), url = updateUrl(raw);
+          const shown = raw.replace(/^https?:\/\/(www\.)?/i, '');
+          out += url ? `<a class="update-link" ${linkAttrs(url)} dir="ltr">${esc(shown.length > 40 ? `${shown.slice(0, 38)}…` : shown)}</a>${esc(tail)}` : esc(m[4]);
+        }
+      }
+      return out + esc(line.slice(last));
+    };
+    return String(text || '').replace(/\r/g, '').split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean)
+      .map((p) => `<p>${p.split('\n').map(inline).join('<br>')}</p>`).join('');
+  }
+  /** הטקסט בלי הסימון — לתקציר ולתצוגה בלי קישורים */
+  const updatePlain = (text) => String(text || '').replace(/\[([^\]\n]{1,300})\]\(([^)\s]{1,1000})\)/g, '$1').replace(/\*\*([^*\n]{1,500})\*\*/g, '$1');
+  const FILE_ICONS = [[/\.pdf$/i, '📄', 'PDF'], [/\.(docx?|odt|rtf)$/i, '📝', 'Word'], [/\.(xlsx?|csv|ods)$/i, '📊', 'גיליון'], [/\.(pptx?|odp)$/i, '📽️', 'מצגת'], [/\.(jpe?g|png|webp|gif)$/i, '🖼️', 'תמונה'], [/\.(mp3|m4a|wav|ogg|aac)$/i, '🎧', 'שמע'], [/\.(mp4|mov|webm)$/i, '🎬', 'וידאו'], [/\.zip$/i, '🗜️', 'ZIP'], [/\.txt$/i, '📃', 'טקסט']];
+  function fileKind(f) {
+    const probe = `${f.name || ''} ${(f.url || '').split('?')[0]}`.split(' ');
+    for (const [re, icon, label] of FILE_ICONS) if (probe.some((x) => re.test(x))) return { icon, label };
+    return { icon: '📎', label: 'קובץ' };
+  }
+  function fmtSize(n) {
+    if (!(n > 0)) return '';
+    if (n < 1024 * 1024) return `${Math.max(1, Math.round(n / 1024))} KB`;
+    return `${(n / 1024 / 1024).toFixed(n < 10 * 1024 * 1024 ? 1 : 0)} MB`;
+  }
+  /** כפתורי הקישור והקבצים של עדכון. הקישור הישן (שדה link) מוצג ככפתור "לפרטים". */
+  function updateExtras(u) {
+    const links = [...(u.links || []), ...(u.link && !(u.links || []).length ? [{ label: 'לפרטים', url: u.link }] : [])]
+      .map((l) => ({ label: String(l.label || '').trim(), url: updateUrl(l.url) })).filter((l) => l.url);
+    const files = (u.files || []).filter((f) => /^https:\/\/|^\/media\//.test(f.url || ''));
+    return `${files.length ? `<ul class="update-files">${files.map((f) => {
+      const k = fileKind(f), size = fmtSize(f.size);
+      return `<li><a class="update-file" href="${esc(f.url)}" target="_blank" rel="noopener"><span class="update-file-icon" aria-hidden="true">${k.icon}</span><span class="update-file-name">${esc(f.name || 'קובץ מצורף')}</span><small>${esc([k.label, size].filter(Boolean).join(' · '))}</small><span class="update-file-go" aria-hidden="true">↓</span></a></li>`;
+    }).join('')}</ul>` : ''}${links.length ? `<div class="actions update-actions">${links.map((l, i) => `<a class="btn small${i ? ' ghost' : ''}" ${linkAttrs(l.url)}>${esc(l.label || 'לפרטים')} <span>←</span></a>`).join('')}</div>` : ''}`;
+  }
+
   function markUpdatesSeen(ids) {
     const all = seenUpdates();
     (ids || (window.RoshStore?.settings?.updates || []).map((u) => u.id)).forEach((id) => all.add(id));
@@ -752,5 +813,5 @@
     catch (e) { if (d.isConnected) d.querySelector('[data-login-error]').textContent = 'כפתור Google לא נטען. רעננו את הדף ונסו שוב.'; }
   }
 
-  window.RoshUI = { offerLogin, newUpdates, markUpdatesSeen, banner, messageForm, mountSubscribe, esc, fmtTime, parseTime, fmtDuration, fmtDate, fmtHebDate, fmtWeekday, slugify, qs, header, footer, repaintHeader, actionButtons, paintActions, push, notify, kbdHelp, isTyping, copy, driveId, isDriveUrl, streamUrl, streamCandidates, downloadUrl, shareUrl, publicLinks, coverVars, hue, seasonVars, epCard, reveal, pauseOffscreen, countUp, eqBars, reduceMotion, applyPrefs };
+  window.RoshUI = { offerLogin, newUpdates, markUpdatesSeen, updateUrl, updateText, updatePlain, updateExtras, fmtSize, banner, messageForm, mountSubscribe, esc, fmtTime, parseTime, fmtDuration, fmtDate, fmtHebDate, fmtWeekday, slugify, qs, header, footer, repaintHeader, actionButtons, paintActions, push, notify, kbdHelp, isTyping, copy, driveId, isDriveUrl, streamUrl, streamCandidates, downloadUrl, shareUrl, publicLinks, coverVars, hue, seasonVars, epCard, reveal, pauseOffscreen, countUp, eqBars, reduceMotion, applyPrefs };
 })();

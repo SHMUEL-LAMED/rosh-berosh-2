@@ -1,4 +1,4 @@
-/* דף העדכונים: ההודעות הקצרות שמנהל כתב באזור הניהול, מהחדשה לישנה. */
+/* דף העדכונים: ההודעות שמנהל כתב באזור הניהול, מהחדשה לישנה — עם קישורים, כפתורים וקבצים מצורפים (RoshUI.updateText/updateExtras). */
 (async function () {
   'use strict';
   const U = window.RoshUI, S = window.RoshStore;
@@ -16,8 +16,8 @@
 <article class="card update${fresh.has(u.id) ? ' is-new' : ''}" data-reveal>
   <time datetime="${esc(u.date)}">${esc(fmtDate(u.date) || '')}${fresh.has(u.id) ? '<span class="new-tag">חדש</span>' : ''}${u.pinned ? '<span class="pin">נעוץ</span>' : ''}</time>
   ${u.title ? `<h2>${esc(u.title)}</h2>` : ''}
-  ${u.text ? `<p>${esc(u.text)}</p>` : ''}
-  ${u.link ? `<div class="actions"><a class="btn small" href="${esc(u.link)}" ${/^https?:/.test(u.link) ? 'target="_blank" rel="noopener"' : ''}>לפרטים <span>←</span></a></div>` : ''}
+  ${u.text ? `<div class="update-text">${U.updateText(u.text)}</div>` : ''}
+  ${U.updateExtras(u)}
 </article>`).join('') : '<div class="card"><div class="state"><span class="mark">✦</span><h3>אין עדכונים כרגע</h3><p>כשיהיה משהו חדש, הוא יופיע כאן.</p></div></div>';
   U.reveal();
   // נכנסתם לדף — כל העדכונים נחשבים "ראיתם" (הסימון "חדש" נשאר עד הביקור הבא)

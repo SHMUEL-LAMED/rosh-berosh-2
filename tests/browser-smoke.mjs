@@ -223,6 +223,14 @@ await page.waitForFunction(() => document.querySelector('#results .ep-card b')?.
 check((await page.locator('#results .ep-card b').first().innerText()) === 'קווי מתאר', 'חיפוש סולח על כתיב חסר ("קוי" מוצא את "קווי")');
 check(await page.evaluate(() => window.RoshStore.searchEpisodes('בפטריוטים').some((e) => e.title === 'עולמות של פטריוטים')), 'חיפוש מתעלם מאותיות שימוש בתחילת מילה (ב־, ה־, ל־…)');
 check(await page.evaluate(() => window.RoshStore.searchEpisodes('xyzxyz').length === 0), 'חיפוש סלחני לא ממציא תוצאות');
+check(await page.evaluate(() => { const r = window.RoshStore.searchEpisodes('תוכנית 89'); return r.length === 1 && r[0].number === 89; }), 'חיפוש "תוכנית 89" (התווית שעל הכרטיס) מוצא את תוכנית 89');
+{
+  // תוכניות בלי תאריך נשארות בין השכנות שלהן במספר — בארכיון, בקודמת/הבאה ובנגן
+  const seq = await page.evaluate(() => { const n = window.RoshStore.episodes().map((e) => e.number).filter((x) => x != null); const i = n.indexOf(66); return n.slice(i, i + 10).join(' '); });
+  check(seq === '66 65 64 63 62 61 60 59 58 57', `סדר התוכניות לפי המספר גם כשחסר תאריך (${seq})`);
+}
+// הכריכה של משדר התוצאות מוצגת באתר בלבד: הניהול (טיוטה ופרסום) מקבל את הכריכה שבקטלוג
+check(await page.evaluate(() => window.RoshStore.admin.normalize({ episodes: [{ id: 'x', number: 90, title: 'מצעד האלבומים 25 שנות מוזיקה ', cover: 'https://example.com/c.jpg' }] }).episodes[0].cover === 'https://example.com/c.jpg'), 'הכריכה המיוחדת לא נכנסת לנתונים שהניהול מפרסם');
 check(await page.evaluate(() => { const b = (from) => window.RoshStore.bannerActive({ enabled: true, text: 'x', from, until: '', sites: { program: true } }); return !b('2999-01-01') && b('2000-01-01') && b(''); }), 'הודעה מתוזמנת מופיעה רק מיום ההתחלה');
 check(await page.evaluate(() => { const H = window.RoshHoliday; const on = (d) => H.on(new Date(`${d}T12:00:00Z`)); return on('2026-12-07')?.candles === 3 && on('2027-03-23')?.key === 'purim' && on('2026-09-26')?.key === 'sukkot' && on('2026-09-21')?.quiet && on('2026-11-01') === null; }), 'מצב חג לפי הלוח העברי (חנוכה — נר שלישי, פורים באדר ב׳, סוכות, יום כיפור שקט)');
 await page.goto(`${BASE}/index.html?holiday=purim`);
@@ -337,6 +345,51 @@ for (const mode of ['slow', 'down']) {
   const rejected = await open({ me: { status: 200, body: { user: seed.user } }, userdata: { status: 200, body: { data: null, updatedAt: null } }, subscribe: { status: 401, body: { error: 'צריך להתחבר.' } }, likes: { status: 200, body: { counts: {}, mine: [] } } }, 'index.html');
   check(!rejected.session, 'טוקן שנדחה (401): הסשן במכשיר נמחק');
   check(!rejected.calls.some((c) => /logout/.test(c)), `טוקן שנדחה: בלי /logout שמנתק את החשבון מכל המכשירים (calls: ${rejected.calls.join(', ')})`);
+}
+
+/* ---------- הנתונים האישיים בזמן ניגון ----------
+   המיקום מתעדכן כל כמה שניות בזמן ניגון: הוא נשמר בחשבון יחד עם זמן ההאזנה (פעם בחצי דקה,
+   ובעצירה) — לא שמירה מלאה כל 5 שניות — והאזור האישי לא מצויר מחדש (הפוקוס נשאר בבורר).
+   לפני שמירה קוראים מהשרת וממזגים: מה שנשמר בינתיים ממכשיר אחר לא נדרס. */
+{
+  const user = { email: 'user@example.com', name: 'מאזין', isAdmin: false };
+  let server = { later: [] };
+  const calls = [];
+  const c3 = await browser.newContext({ locale: 'he-IL', viewport: { width: 1200, height: 900 }, ignoreHTTPSErrors: !!process.env.HTTPS_PROXY });
+  const rate = 8000, len = rate * 600, wav = Buffer.alloc(44 + len, 0x80);
+  wav.write('RIFF', 0); wav.writeUInt32LE(36 + len, 4); wav.write('WAVEfmt ', 8); wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22);
+  wav.writeUInt32LE(rate, 24); wav.writeUInt32LE(rate, 28); wav.writeUInt16LE(1, 32); wav.writeUInt16LE(8, 34); wav.write('data', 36); wav.writeUInt32LE(len, 40);
+  await c3.route('**/api/program/**', (route) => {
+    const req = route.request(), m = req.method(), path = new URL(req.url()).pathname.replace(/^.*\/api\/program\//, '');
+    const json = (body) => route.fulfill({ status: 200, headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'access-control-allow-headers': 'authorization,content-type' }, body: JSON.stringify(body) });
+    if (m === 'OPTIONS') return json({});
+    if (path.startsWith('stream/')) return route.fulfill({ status: 200, headers: { 'access-control-allow-origin': '*', 'content-type': 'audio/wav' }, body: wav });
+    calls.push(`${m} ${path}`);
+    if (path === 'userdata') { if (m === 'PUT') server = req.postDataJSON().data; return json(m === 'GET' ? { data: server, updatedAt: null } : { ok: true }); }
+    if (path === 'me') return json({ user });
+    if (path === 'likes') return json({ counts: {}, mine: [] });
+    return route.abort();
+  });
+  const p = await c3.newPage();
+  await p.goto(`${BASE}/index.html`, { waitUntil: 'domcontentloaded' });
+  await p.evaluate((u) => localStorage.setItem('rosh:cf:session', JSON.stringify({ token: 'test', user: u })), user);
+  await p.goto(`${BASE}/me.html`);
+  await p.waitForSelector('#me-prefs [data-pref-theme]');
+  const id = await p.evaluate(() => { const ep = window.RoshStore.episodes().find((e) => e.stream); window.RoshPlayer.load(ep, { at: 30 }); return ep.id; });
+  await p.waitForFunction(() => window.RoshPlayer.time > 1, null, { timeout: 15000 });
+  await p.waitForTimeout(3000);   // השמירה של "נוגן" (היסטוריה)
+  await p.focus('#me-prefs [data-pref-theme]');
+  calls.length = 0;
+  await p.waitForTimeout(12000);
+  const puts = calls.filter((c) => c === 'PUT userdata').length;
+  const focused = await p.evaluate(() => !window.RoshPlayer.paused && document.activeElement?.matches('[data-pref-theme]'));
+  check(puts === 0 && focused, `בזמן ניגון: בלי שמירה מלאה כל 5 שניות (${puts} שמירות ב־12 שניות), והפוקוס באזור האישי נשאר במקום`);
+  server = { ...server, later: ['from-other-device', ...(server.later || [])] };   // מכשיר אחר שמר בינתיים
+  await p.evaluate(() => window.RoshPlayer.pause());
+  await p.waitForFunction(() => !window.RoshStore.me.dirty && !window.RoshStore.me.saving, null, { timeout: 8000 }).catch(() => {});
+  await p.waitForTimeout(300);
+  check(server.later?.includes('from-other-device') && server.positions?.[id]?.dur > 0 && server.listenSeconds > 0, `בעצירה המיקום וזמן ההאזנה נשמרים, בלי לדרוס את מה שנשמר ממכשיר אחר (later: ${JSON.stringify(server.later)})`);
+  await c3.close();
 }
 
 /* ---------- סיכום ---------- */

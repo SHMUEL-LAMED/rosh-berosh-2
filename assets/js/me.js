@@ -18,6 +18,8 @@
   document.getElementById('site-footer').innerHTML = U.footer(site);
 
   const P = document.getElementById('me-profile');
+  // הדף צויר מהעותק השמור, והקטלוג החדש שהגיע אחריו שונה ממנו — מציירים את הדף מחדש (הנגן ממשיך)
+  window.addEventListener('rosh:catalog', () => window.RoshApp?.navigate(location.href, { push: false, y: window.scrollY }), on);
   const $ = (id) => document.getElementById(id);
 
   function firstName(u) { return String(u?.name || u?.email || '').split(/[\s@]/)[0] || ''; }

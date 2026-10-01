@@ -10,6 +10,7 @@ const API = 'https://rosh-berosh.smwlyqswkwt232.workers.dev';
 const fails = [];
 const check = (ok, msg) => { console.log(`${ok ? '✓' : '✕'} ${msg}`); if (!ok) fails.push(msg); };
 const catalog = JSON.parse(readFileSync(new URL('../data/episodes.json', import.meta.url), 'utf8'));
+const demoWav = readFileSync(new URL('../assets/audio/demo.wav', import.meta.url));   // 42 שניות
 let published = null; let draftPuts = 0; let events = []; let messagesSent = [];
 let settings = { banner: { enabled: false, text: '', link: '', linkLabel: '', until: '', sites: { program: true, survey: false } }, updates: [], survey: { id: 'main', name: 'מצעד האלבומים', open: true, url: 'https://rosh-berosh.smwlyqswkwt232.workers.dev/' } };
 let handoffs = 0; let logouts = 0; let ssoBounces = 0; let ssoSignedIn = false;
@@ -86,7 +87,12 @@ await ctx.route(`${API}/**`, async (route) => {
   if (p === '/api/program/sso') { const back = new URL(url.searchParams.get('return')); back.searchParams.set('sso', ssoSignedIn ? 'c0ffee' : 'none'); ssoBounces++; return route.fulfill({ status: 302, headers: { location: back.toString() } }); }
   if (p === '/api/program/banner') return json({ banner: null });
   if (p === '/api/program/handoff/c0ffee') return route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>ניהול משותף</title>' });
-  if (p.startsWith('/api/program/stream/')) return route.fulfill({ status: 206, headers: { 'access-control-allow-origin': '*', 'content-range': 'bytes 0-1/100', 'content-type': 'audio/mpeg' }, body: Buffer.from([0, 0]) });
+  // הקלטה אמיתית (קצרה): האזנה נספרת רק כשהנגן באמת מתחיל לנגן
+  if (p.startsWith('/api/program/stream/')) {
+    const m = /bytes=(\d+)-(\d*)/.exec(req.headers().range || '');
+    const start = m ? Number(m[1]) : 0, end = m && m[2] ? Number(m[2]) : demoWav.length - 1;
+    return route.fulfill({ status: m ? 206 : 200, headers: { 'access-control-allow-origin': '*', 'accept-ranges': 'bytes', 'content-type': 'audio/wav', ...(m ? { 'content-range': `bytes ${start}-${end}/${demoWav.length}` } : {}) }, body: demoWav.subarray(start, end + 1) });
+  }
   return json({ error: 'לא נמצא' }, 404);
 });
 await ctx.route('https://accounts.google.com/**', (route) => route.abort());

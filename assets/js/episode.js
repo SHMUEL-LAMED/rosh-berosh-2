@@ -63,6 +63,8 @@
 
   const season = S.seasons().find((s) => s.id === ep.season);
   const stream = ep.stream;
+  // הדף צויר מהעותק השמור, והקטלוג החדש שהגיע אחריו שונה ממנו — מציירים את הדף מחדש (הנגן ממשיך)
+  window.addEventListener('rosh:catalog', () => window.RoshApp?.navigate(location.href, { push: false, y: window.scrollY }), on);
   document.title = `${ep.title} — ${site.name || 'ראש בראש'}`;
   document.querySelector('meta[name="description"]').setAttribute('content', ep.description.slice(0, 160) || ep.title);
 
@@ -71,10 +73,17 @@
   {
     const siteBase = String(site.url || 'https://shmuel-lamed.github.io/rosh-berosh-2/').replace(/\/?$/, '/');
     const fileSafe = ep.slug.length <= 150 && !/[/\\?#%\x00-\x1f\x7f]/.test(ep.slug) && !ep.slug.startsWith('.');
-    const href = siteBase + (fileSafe ? `episodes/${encodeURIComponent(ep.slug)}.html` : `episode.html?ep=${encodeURIComponent(ep.slug)}`);
+    const staticPath = `episodes/${encodeURIComponent(ep.slug)}.html`;
+    const href = siteBase + (fileSafe ? staticPath : `episode.html?ep=${encodeURIComponent(ep.slug)}`);
     let link = document.querySelector('link[rel="canonical"]');
     if (!link) { link = document.createElement('link'); link.rel = 'canonical'; document.head.appendChild(link); }
-    link.href = href;
+    // הדף הסטטי של תוכנית חדשה נבנה רק בפריסה הבאה: עד שהוא קיים, ה־canonical הוא הכתובת הזו
+    // (episode.html?ep=…) — ולא דף שמחזיר 404. sitemap.xml נבנה באותה פריסה ומונה בדיוק את הדפים הסטטיים
+    if (!fileSafe || document.body.dataset.ep) link.href = href;
+    else {
+      link.href = `${siteBase}episode.html?ep=${encodeURIComponent(ep.slug)}`;
+      fetch('sitemap.xml', { cache: 'no-cache' }).then((r) => (r.ok ? r.text() : '')).then((xml) => { if (xml.includes(`${staticPath}</loc>`) && !on.signal?.aborted && link.isConnected) link.href = href; }).catch(() => {});
+    }
   }
 
   // נתונים מובנים למנועי חיפוש

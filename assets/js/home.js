@@ -24,6 +24,8 @@
   const list = S.episodes();
   const feat = S.featured();
   const shows = list.filter((e) => e.season !== 'sets');
+  // הדף צויר מהעותק השמור, והקטלוג החדש שהגיע אחריו שונה ממנו — מציירים את הדף מחדש (הנגן ממשיך)
+  window.addEventListener('rosh:catalog', () => window.RoshApp?.navigate(location.href, { push: false, y: window.scrollY }), on);
 
   /* ---------- גיבור ---------- */
   // בטלפון חצי מהעמודות: אותו מראה, חצי מהאנימציות
@@ -58,7 +60,7 @@
     ${feat.number != null ? `<strong>תוכנית ${feat.number}</strong>` : ''}
   </div>
   <div class="ep-hero">
-    <div class="cover"${feat.cover === 'assets/img/album-chart-25-results.jpg' ? ' style="width:100%;max-width:240px;height:auto;justify-self:center"' : ''}>${feat.cover ? `<img src="${esc(feat.cover)}" alt=""${feat.cover === 'assets/img/album-chart-25-results.jpg' ? ' style="display:block;width:100%;height:auto;aspect-ratio:auto;object-fit:contain"' : ''} fetchpriority="high" decoding="async">` : `<div class="vinyl live" data-num="${feat.number ?? '♫'}" style="--label:${U.hue(feat)}" data-vinyl="${esc(feat.id)}"><i></i></div>`}</div>
+    <div class="cover"${/\/album-chart-25-results\.jpg$/.test(feat.cover) ? ' style="width:100%;max-width:240px;height:auto;justify-self:center"' : ''}>${feat.cover ? `<img src="${esc(feat.cover)}" alt=""${/\/album-chart-25-results\.jpg$/.test(feat.cover) ? ' style="display:block;width:100%;height:auto;aspect-ratio:auto;object-fit:contain"' : ''} fetchpriority="high" decoding="async">` : `<div class="vinyl live" data-num="${feat.number ?? '♫'}" style="--label:${U.hue(feat)}" data-vinyl="${esc(feat.id)}"><i></i></div>`}</div>
     <div>
       <div class="meta">
         ${feat.date ? `<span class="pill">${esc(U.fmtWeekday(feat.date))}, ${esc(fmtDate(feat.date))}</span><span class="pill">${esc(U.fmtHebDate(feat.date))}</span>` : ''}

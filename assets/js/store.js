@@ -65,22 +65,28 @@
         .map((t) => ({ at: Math.max(0, Number(t.at) || 0), title: String(t.title || ''), artist: String(t.artist || ''), note: String(t.note || '') }))
         .sort((a, b) => a.at - b.at),
     };
-    // הכרזה המקורית של משדר התוצאות, גם כאשר הקטלוג נטען מהשרת.
-    if (ep.number === 90 && ep.title.trim() === 'מצעד האלבומים 25 שנות מוזיקה') {
-      ep.cover = 'assets/img/album-chart-25-results.jpg';
-      ep.thumb = ep.cover;
-    }
     // הכתובת שהנגן מנגן בפועל (קובץ ישיר או הזרמה ישירה מהדרייב). שדה מחושב —
     // לא נכנס ל־JSON שמתפרסם, ולכן מוגדר כלא־ניתן־למנייה.
     Object.defineProperty(ep, 'stream', { get() { return window.RoshUI?.streamUrl(this) || ''; }, enumerable: false, configurable: true });
     return ep;
   }
 
-  function normalize(raw) {
+  /* הכרזה המקורית של משדר התוצאות, גם כאשר הקטלוג נטען מהשרת — לתצוגה בדפי האתר בלבד
+     (normalize(raw, true) ב־load). הניהול משתמש ב־normalize בלי הדגל, כך שהתמונה הזו לא נכנסת
+     לטיוטה ולפרסום ולא דורסת את הכריכה שבקטלוג. כתובת מלאה — גם ב־JSON-LD ובמייל. */
+  const SHOW_COVER = 'assets/img/album-chart-25-results.jpg';
+  function showCover(ep) {
+    if (ep.number !== 90 || ep.title.trim() !== 'מצעד האלבומים 25 שנות מוזיקה') return;
+    let src = SHOW_COVER; try { src = new URL(SHOW_COVER, document.baseURI).href; } catch { /* */ }
+    ep.cover = src; ep.thumb = src;
+  }
+
+  function normalize(raw, display = false) {
     const seasons = (Array.isArray(raw?.seasons) ? raw.seasons : []).map((s, i) => ({
       id: String(s.id || `s${i + 1}`), title: String(s.title || `עונה ${i + 1}`), year: s.year ? Number(s.year) : null, note: String(s.note || ''),
     }));
     const episodes = (Array.isArray(raw?.episodes) ? raw.episodes : []).map(normEpisode);
+    if (display) episodes.forEach(showCover);
     // עונות שמופיעות בתוכניות אך לא הוגדרו
     for (const e of episodes) {
       if (e.season && !seasons.find((s) => s.id === e.season)) seasons.push({ id: e.season, title: e.season, year: null, note: '' });
@@ -346,11 +352,11 @@
     },
     /* כניסה ישירה עם Google מתוך האתר (בלי דף ביניים): כפתור Google נטען
        לתוך אלמנט, והאישור נשלח ל־Worker שמחזיר סשן. */
-    async google(el, { onDone, onError, oneTap = false } = {}) {
+    async google(el, { onDone, onError, onLeave, oneTap = false } = {}) {
       const clientId = this.cfg?.googleClientId;
       if (!clientId || (!el && !oneTap)) throw new Error('כניסה עם Google אינה מוגדרת באתר הזה.');
       await this.loadGoogle();
-      this._googleCallbacks = { onDone, onError };
+      this._googleCallbacks = { onDone, onError, onLeave };   // onLeave: רגע לפני המעבר דרך אתר הסקר (הדף נטען מחדש)
       if (!this._googleInitialized) window.google.accounts.id.initialize({
         client_id: clientId, ux_mode: 'popup', auto_select: false, itp_support: true,
         callback: async ({ credential }) => {
@@ -365,7 +371,9 @@
             await me.load(); await me.save(true);
             // הטוקן נדחה בינתיים והסשן נמחק: לא מודיעים "התחברתם" על כניסה שלא נשמרה
             if (!this.session?.token) throw new Error('ההתחברות לא נשמרה. נסו שוב בעוד רגע.');
-            if (await this.shareLogin()) return;
+            // בזמן ניגון לא עוברים דרך אתר הסקר — המעבר טוען את הדף מחדש ועוצר את ההאזנה
+            const listening = window.RoshPlayer && !window.RoshPlayer.paused;
+            if (!listening) { this._googleCallbacks?.onLeave?.(); if (await this.shareLogin()) return; }
             await signedIn();
             this._googleCallbacks?.onDone?.(this.user);
           } catch (err) { this._googleCallbacks?.onError?.(err); }
@@ -582,7 +590,7 @@
     // שבזיכרון של הניהול — בלי שרת, בלי סטטיסטיקה ובלי נתונים אישיים
     try {
       if (new URLSearchParams(location.search).has('live') && window.parent !== window && typeof window.parent.RoshAdminLive === 'function') {
-        state.data = normalize(window.parent.RoshAdminLive());
+        state.data = normalize(window.parent.RoshAdminLive(), true);
         state.live = true; state.loadedFrom = 'live';
         me.loaded = true;
         readyResolve(state);
@@ -635,8 +643,8 @@
 
     // תמיד מה שפורסם (או תצוגה מקדימה בקישור). טיוטת הניהול נטענת מהשרת בדף הניהול עצמו.
     if (state.preview && state.source === 'cloudflare') {
-      try { state.data = normalize((await sb.preview.open(state.preview)).data); state.loadedFrom = 'preview'; }
-      catch (e) { state.error = e; state.preview = null; try { sessionStorage.removeItem(LS.preview); } catch { /* */ } state.data = normalize(await sb.pull(false, { timeout: CATALOG_TIMEOUT }).catch(() => ({}))); state.loadedFrom = state.source; }
+      try { state.data = normalize((await sb.preview.open(state.preview)).data, true); state.loadedFrom = 'preview'; }
+      catch (e) { state.error = e; state.preview = null; try { sessionStorage.removeItem(LS.preview); } catch { /* */ } state.data = normalize(await sb.pull(false, { timeout: CATALOG_TIMEOUT }).catch(() => ({})), true); state.loadedFrom = state.source; }
     } else {
       try {
         let raw;
@@ -653,21 +661,26 @@
             raw = copy;
             state.loadedFrom = 'copy';
             state.fresh = fresh.then((next) => {
-              const remote = normalize(next);
-              if (remote.episodes.length) { state.data = remote; state.loadedFrom = 'cloudflare'; saveCopy(next); }
+              const remote = normalize(next, true);
+              if (!remote.episodes.length) return;
+              state.data = remote; state.loadedFrom = 'cloudflare'; saveCopy(next);
+              // הדף כבר צויר מהעותק: כשהקטלוג החדש שונה ממנו (תוכנית חדשה, תוכנית שהוסתרה…) הדפים
+              // מציירים את עצמם מחדש (rosh:catalog) — בלי לחכות למעבר דף
+              const key = (r) => JSON.stringify([r?.seasons, r?.episodes, r?.settings]);
+              if (key(next) !== key(copy)) window.dispatchEvent(new CustomEvent('rosh:catalog'));
             }).catch(() => {});
-            state.data = normalize(raw);
+            state.data = normalize(raw, true);
             await personal;
             readyResolve(state);
             return state;
           }
         } else raw = await fetchJSON('data/episodes.json');
-        const remote = normalize(raw);
+        const remote = normalize(raw, true);
         // חיבור חדש ל־D1 מחזיר קטלוג תקין אך ריק. במקרה כזה מציגים מיד את
         // הקטלוג המלא שנבנה מתיקיית הדרייב של התוכנית, במקום אתר ריק. מנהל
         // יכול לפרסם את אותה רשימה ל־D1 בלחיצה אחת מאזור הניהול.
         if (state.source === 'cloudflare' && remote.episodes.length === 0) {
-          state.data = normalize(await fetchJSON('data/episodes.json'));
+          state.data = normalize(await fetchJSON('data/episodes.json'), true);
           state.loadedFrom = 'json-empty-cloudflare';
         } else {
           state.data = remote;
@@ -678,9 +691,9 @@
         // נפילה חזרה לקובץ המקומי אם Cloudflare לא זמין. שרת שרק לא ענה בזמן (AbortError —
         // למשל מופע חדש של ה־Worker שמתעורר) אינו תקלה: 'json-slow', והעותק מוצג בלי הודעה
         if (state.source === 'cloudflare') {
-          try { state.data = normalize(await fetchJSON('data/episodes.json')); state.loadedFrom = e?.name === 'AbortError' ? 'json-slow' : 'json-fallback'; }
-          catch { state.data = normalize({}); }
-        } else state.data = normalize({});
+          try { state.data = normalize(await fetchJSON('data/episodes.json'), true); state.loadedFrom = e?.name === 'AbortError' ? 'json-slow' : 'json-fallback'; }
+          catch { state.data = normalize({}, true); }
+        } else state.data = normalize({}, true);
       }
     }
     await personal;
@@ -699,7 +712,8 @@
       (הניהול וטופס התפוצה בודקים את המצב מיד אחרי הקריאה), וההבטחה מסתיימת אחרי השמירה. */
   async function signOut() {
     let saved;
-    try { saved = me.save(true); } catch { /* */ }
+    // השמירה האחרונה יוצאת מיד, לפני שהסשן נמחק (בלי קריאה מקדימה מהשרת)
+    try { saved = me.save(true, { keepalive: true }); } catch { /* */ }
     sb.signOut(saved);
     me.reset(); likes.mine = new Set(); sessionChanged();
     try { await saved; } catch { /* */ }
@@ -713,11 +727,24 @@
 
   /* ---------- שאילתות ---------- */
 
-  const byDate = (a, b) => (b.date || '').localeCompare(a.date || '') || (b.number || 0) - (a.number || 0);
+  /* תאריך המיון: רוב התוכניות הישנות בלי תאריך. תוכנית ממוספרת בלי תאריך מקבלת לצורך המיון את
+     התאריך המאוחר ביותר של תוכנית מתוארכת שמספרה קטן משלה או שווה לו — וכך נשארת בין השכנות
+     שלה במספר, ולא נופלת אחרי כל התוכניות המתוארכות (בארכיון, בקודמת/הבאה ובנגן) */
+  function sortDates(list) {
+    const dated = list.filter((e) => e.date && e.number != null).sort((a, b) => a.number - b.number);
+    return new Map(list.map((e) => {
+      if (e.date || e.number == null) return [e, e.date || ''];
+      let k = '';
+      for (const d of dated) { if (d.number > e.number) break; if (d.date > k) k = d.date; }
+      return [e, k];
+    }));
+  }
 
   function episodes({ includeHidden = false, includeScheduled = false } = {}) {
     const now = new Date();
-    return state.data.episodes.filter((e) => includeHidden || (e.visible && (includeScheduled || !scheduled(e, now)))).sort(byDate);
+    const list = state.data.episodes.filter((e) => includeHidden || (e.visible && (includeScheduled || !scheduled(e, now))));
+    const d = sortDates(list);
+    return list.sort((a, b) => d.get(b).localeCompare(d.get(a)) || (b.number || 0) - (a.number || 0));
   }
   function seasons() {
     const list = state.data.seasons.slice();
@@ -794,6 +821,9 @@
   function searchEpisodes(q, list = episodes()) {
     q = fold(q);
     if (!q) return list;
+    // "תוכנית 90" — התווית שמופיעה על כל כרטיס: התוכנית עם המספר הזה
+    const num = /^ה?תו?כנית (\d+(?: \d+)?)$/.exec(q);
+    if (num) { const hit = list.filter((e) => e.number != null && fold(String(e.number)) === num[1]); if (hit.length) return hit; }
     const terms = q.split(' ');
     const exact = list.filter((e) => { const hay = haystack(e); return terms.every((t) => hay.includes(t)); });
     if (exact.length) return exact;
@@ -861,6 +891,36 @@
     for (const [id, list] of Object.entries(x.moments)) out.moments[id] = [...new Set([...(out.moments[id] || []), ...list])].sort((a, b) => a - b);
     return out;
   }
+  /** מיזוג תלת־כיווני לפני שמירה: base — מה שהיה בשרת כשהדף קרא או שמר לאחרונה, local — מה שבדף,
+      server — מה שבשרת עכשיו (לשונית או מכשיר אחר שמרו בינתיים). נשמר כל מה שהשתנה בשרת, ורק
+      השינויים שנעשו בדף הזה מתווספים עליו — במקום שהדף ידרוס את השרת בתמונת המצב שלו. */
+  function merge3(base, local, server) {
+    const b = cleanMe(base), l = cleanMe(local), out = cleanMe(server);
+    const same = (x, y) => JSON.stringify(x) === JSON.stringify(y);
+    const setMerge = (k, front) => {
+      const added = l[k].filter((id) => !b[k].includes(id)), removed = b[k].filter((id) => !l[k].includes(id));
+      const kept = out[k].filter((id) => !removed.includes(id) && !added.includes(id));
+      out[k] = front ? [...added, ...kept] : [...kept, ...added];
+    };
+    setMerge('later', true); setMerge('queue', false); setMerge('finished', true);
+    for (const [id, p] of Object.entries(l.positions)) if (!same(p, b.positions[id]) && (!out.positions[id] || p.at >= out.positions[id].at)) out.positions[id] = p;
+    for (const [id, p] of Object.entries(b.positions)) if (!l.positions[id] && out.positions[id] && out.positions[id].at <= p.at) delete out.positions[id];
+    const hist = new Map(out.history.map((h) => [h.id, h]));
+    for (const h of l.history) if (!hist.has(h.id) || hist.get(h.id).at < h.at) hist.set(h.id, h);
+    for (const h of b.history) if (!l.history.some((x) => x.id === h.id) && hist.get(h.id)?.at <= h.at) hist.delete(h.id);
+    out.history = [...hist.values()].sort((x, y) => y.at - x.at).slice(0, 300);
+    for (const k of new Set([...Object.keys(l.prefs), ...Object.keys(b.prefs)])) if (!same(l.prefs[k], b.prefs[k])) { if (l.prefs[k] === undefined) delete out.prefs[k]; else out.prefs[k] = l.prefs[k]; }
+    if (!same(l.last, b.last)) out.last = l.last;
+    out.listenSeconds += Math.max(0, l.listenSeconds - b.listenSeconds);
+    for (const id of new Set([...Object.keys(l.moments), ...Object.keys(b.moments)])) {
+      const lm = l.moments[id] || [], bm = b.moments[id] || [];
+      const list = [...new Set([...(out.moments[id] || []).filter((m) => !bm.includes(m) || lm.includes(m)), ...lm.filter((m) => !bm.includes(m))])].sort((x, y) => x - y);
+      if (list.length) out.moments[id] = list; else delete out.moments[id];
+    }
+    return out;
+  }
+  // לשוניות באותו דפדפן: אחרי שמירה הלשוניות האחרות קוראות מהשרת וממזגות (בלי שום נתון אישי במכשיר)
+  let channel = null; try { channel = new BroadcastChannel('rosh:userdata'); } catch { /* */ }
 
   const me = {
     data: blank(),
@@ -871,23 +931,43 @@
     listeners: new Set(),
     onChange(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); },
     emit() { this.listeners.forEach((fn) => { try { fn(this.data); } catch { /* */ } }); },
+    base: null,          // מה שהיה בשרת בקריאה או בשמירה האחרונה (למיזוג לפני שמירה)
+    failures: 0,
+    /** הנתונים מהחשבון. תקלה רגעית (לא 401) — ניסיון נוסף אחרי שנייה וחצי */
+    async fetchData() {
+      try { return await sb.call('/api/program/userdata'); }
+      catch (e) { if (e.status === 401) throw e; await new Promise((r) => setTimeout(r, 1500)); return sb.call('/api/program/userdata'); }
+    },
     /** טוען את הנתונים מהחשבון (ומצרף אליהם את מה שנעשה בביקור הזה) */
     async load() {
       const email = sb.user?.email || null;
       if (!email || !sb.configured) { this.account = null; this.loaded = true; return this.data; }
+      clearTimeout(this.retry);
+      if (this.saving) await this.saving.catch(() => {});   // קוראים אחרי השמירה שבדרך, לא לפניה
       try {
-        const r = await sb.call('/api/program/userdata');
-        const visit = this.account === email || !hasContent(this.data) ? null : this.data;   // מה שנעשה לפני ההתחברות
+        const r = await this.fetchData();
+        if (sb.user?.email !== email) return this.data;   // החשבון התחלף בזמן הקריאה
+        const same = this.account === email;
+        const visit = !same && (hasContent(this.data) || this.dirty) ? this.data : null;   // מה שנעשה לפני ההתחברות
         const server = cleanMe(r.data);
-        this.data = visit ? mergeMe(server, visit) : (this.dirty ? mergeMe(server, this.data) : server);
+        // אותו חשבון עם שינויים שעוד לא נשמרו: מיזוג תלת־כיווני (זמן ההאזנה לא נספר פעמיים)
+        this.data = visit ? mergeMe(server, visit) : (same && this.dirty ? merge3(this.base, this.data, server) : server);
+        this.base = cleanMe(r.data);   // עותק נפרד: השינויים בדף לא נוגעים בו
         // העברה חד־פעמית: נתונים ישנים שנשמרו פעם במכשיר עוברים לחשבון ונמחקים מהמכשיר
         const legacy = takeLegacy();
         if (legacy) this.data = mergeMe(this.data, legacy);
-        this.account = email; this.loaded = true;
-        if (visit || legacy || this.dirty) this.save(true);
+        this.account = email; this.loaded = true; this.failures = 0;
+        if (visit || legacy) this.save(true);
+        else if (this.dirty) this.touch();   // השינויים שמוזגו נשמרים עם השמירה הבאה
       } catch (e) {
-        if (e.status === 401) sb.session = null;
-        this.account = null; this.loaded = true;
+        this.loaded = true;
+        // הטוקן נדחה: הנתונים של החשבון יוצאים מהדף (ולא מתמזגים לכניסה הבאה)
+        if (e.status === 401) { forgetSession(); return this.data; }
+        // הקריאה הראשונה נכשלה: בלי חשבון לא שומרים (כדי לא לדרוס את מה שבשרת), ומנסים שוב בעוד רגע
+        if (this.account !== email) {
+          this.account = null;
+          this.retry = setTimeout(() => { if (sb.session?.token && !this.account) this.load(); }, Math.min(300000, 15000 * 2 ** this.failures++));
+        }
       }
       this.emit();
       return this.data;
@@ -900,21 +980,50 @@
       clearTimeout(this.timer);
       this.timer = setTimeout(() => this.save(), 2500);
     },
+    /** שינוי שוטף בזמן ניגון (המיקום כל כמה שניות): בלי לצייר מחדש, ונשמר יחד עם זמן ההאזנה
+        פעם בחצי דקה (ובעצירה, במעבר לתוכנית אחרת ובסגירת הדף) */
+    touch() { this.dirty = true; if (this.account && !this.timer) this.timer = setTimeout(() => this.save(), 30000); },
     async save(now = false, { keepalive = false } = {}) {
       clearTimeout(this.timer); this.timer = null;
-      if (!this.account || !sb.session?.token || !this.dirty && !now) return;
+      // הסשן (המשותף לכל הלשוניות) שייך לחשבון אחר — לא כותבים את הנתונים של החשבון הזה אליו
+      if (!this.account || !sb.session?.token || sb.user?.email !== this.account || !this.dirty && !now) return;
+      if (this.saving && !keepalive) { this.dirty = true; return this.saving.then(() => this.save(now)); }
       this.dirty = false;
-      try {
-        const body = JSON.stringify({ data: this.data });
-        // keepalive מוגבל ל־64KB בבתים (עברית = 2 בתים לאות), לא בתווים
-        const r = await fetch(sb.base('/api/program/userdata'), { method: 'PUT', headers: sb.headers(), body, keepalive: keepalive && new Blob([body]).size < 60000, cache: 'no-store' });
-        if (!r.ok) { if (r.status === 401) { sb.session = null; this.account = null; } else this.dirty = true; }
-      } catch { this.dirty = true; }
+      const account = this.account, headers = sb.headers();
+      const run = (async () => {
+        try {
+          let data = this.data, merged = false;
+          // קודם קוראים מה יש בשרת וממזגים — לשונית או מכשיר אחר אולי שמרו בינתיים. בסגירת הדף
+          // (keepalive) אין זמן לקריאה: נשלח מה שבדף, שמוזג בשמירה ובקריאה האחרונות
+          if (!keepalive) {
+            const r = await sb.call('/api/program/userdata');
+            const server = cleanMe(r.data);
+            if (JSON.stringify(server) !== JSON.stringify(this.base)) { data = merge3(this.base, this.data, server); merged = true; }
+            if (this.account === account) this.data = data;
+          }
+          const body = JSON.stringify({ data });
+          if (!merged && body === this.sent) return;   // השרת כבר מחזיק בדיוק את זה
+          // keepalive מוגבל ל־64KB בבתים (עברית = 2 בתים לאות), לא בתווים
+          const r = await fetch(sb.base('/api/program/userdata'), { method: 'PUT', headers, body, keepalive: keepalive && new Blob([body]).size < 60000, cache: 'no-store' });
+          if (!r.ok) { const err = new Error(`userdata ${r.status}`); err.status = r.status; throw err; }
+          if (this.account !== account) return;
+          this.sent = body; this.base = cleanMe(JSON.parse(body).data);
+          if (merged) this.emit();
+          try { channel?.postMessage({ account }); } catch { /* */ }
+        } catch (e) {
+          if (e.status === 401) { if (this.account === account) forgetSession(); return; }
+          if (this.account !== account) return;
+          this.dirty = true;
+          if (!this.timer) this.timer = setTimeout(() => this.save(), 30000);
+        }
+      })();
+      this.saving = run;
+      try { await run; } finally { if (this.saving === run) this.saving = null; }
     },
     /** אחרי מחיקת הנתונים מהחשבון */
-    clear() { clearTimeout(this.timer); this.data = blank(); this.dirty = false; this.emit(); },
+    clear() { clearTimeout(this.timer); this.data = blank(); this.base = blank(); this.sent = ''; this.dirty = false; this.emit(); },
     /** התנתקות: הנתונים של החשבון יוצאים מהדף */
-    reset() { clearTimeout(this.timer); this.data = blank(); this.account = null; this.dirty = false; this.emit(); },
+    reset() { clearTimeout(this.timer); clearTimeout(this.retry); this.data = blank(); this.base = null; this.sent = ''; this.account = null; this.dirty = false; this.emit(); },
   };
   /** נתונים ישנים מהתקופה שבה האתר שמר במכשיר — נאספים פעם אחת ונמחקים */
   function takeLegacy() {
@@ -935,7 +1044,16 @@
   window.addEventListener('pagehide', () => { if (me.dirty) me.save(true, { keepalive: true }); });
   document.addEventListener?.('visibilitychange', () => {
     if (document.hidden) { if (me.dirty) me.save(true, { keepalive: true }); }
-    else if (me.account && !me.dirty && Date.now() - (me.pulledAt || 0) > 60000) { me.pulledAt = Date.now(); me.load(); }   // עדכונים ממכשיר אחר
+    // עדכונים ממכשיר אחר (גם כשיש כאן שינויים שלא נשמרו — הם ממוזגים), או ניסיון חוזר אחרי קריאה שנכשלה
+    else if ((me.account || sb.session?.token) && Date.now() - (me.pulledAt || 0) > 60000) { me.pulledAt = Date.now(); me.load(); }
+  });
+  // לשונית אחרת שמרה את הנתונים של אותו חשבון — קוראים וממזגים
+  if (channel) channel.onmessage = (e) => { if (me.account && e.data?.account === me.account) me.load(); };
+  // לשונית אחרת התנתקה או נכנסה עם חשבון אחר (הסשן משותף): הנתונים של החשבון הקודם יוצאים מהדף
+  window.addEventListener('storage', (e) => {
+    if (e.key !== LS.sb || (sb.user?.email || null) === me.account) return;
+    if (me.account) { me.reset(); likes.mine = new Set(); }
+    if (sb.user) signedIn().catch(() => {}); else sessionChanged();
   });
 
   const prefs = {
@@ -944,6 +1062,9 @@
     set(k, v) { if (me.data.prefs[k] === v) return; me.data.prefs[k] = v; me.change(); },
   };
 
+  /** התוכנית מתנגנת עכשיו: המיקום שלה מתעדכן כל כמה שניות — שמירה שקטה (me.touch) */
+  const playing = (id) => { const Pl = window.RoshPlayer; return !!Pl && !Pl.paused && Pl.isCurrent?.(id); };
+
   const positions = {
     get(id) { return me.data.positions[id] || null; },
     set(id, t, dur) {
@@ -951,7 +1072,7 @@
       me.data.positions[id] = { t: Math.floor(t), dur: Math.floor(dur || 0) || me.data.positions[id]?.dur || 0, at: Date.now() };
       const ids = Object.keys(me.data.positions);
       if (ids.length > 400) ids.sort((a, b) => me.data.positions[a].at - me.data.positions[b].at).slice(0, ids.length - 400).forEach((x) => delete me.data.positions[x]);
-      me.change();
+      playing(id) ? me.touch() : me.change();
     },
     clear(id) { if (me.data.positions[id]) { delete me.data.positions[id]; me.change(); } },
     clearAll() { me.data.positions = {}; me.data.last = null; me.change(); },
@@ -968,7 +1089,7 @@
 
   const last = {
     get() { return me.data.last; },
-    set(id, t) { me.data.last = { id, t: Math.floor(t || 0) }; me.change(); },
+    set(id, t) { me.data.last = { id, t: Math.floor(t || 0) }; playing(id) ? me.touch() : me.change(); },
   };
 
   /** היסטוריית האזנה: התוכניות שנוגנו, מהאחרונה. */
@@ -1089,7 +1210,7 @@
 
   window.RoshStore = {
     state, ready, load, sb, prefs, positions, last, later, history, queue, listening, likes, moments, me, admin,
-    episodes, seasons, bySlug, byId, latest, featured, neighbors, searchEpisodes, suggest, guests, guest, guestKey, hosts, host,
+    episodes, sortDates, seasons, bySlug, byId, latest, featured, neighbors, searchEpisodes, suggest, guests, guest, guestKey, hosts, host,
     bannerActive, scheduled, nowIL, todayIL, onSession, signedIn, signOut, forgetSession,
     get site() { return state.site; },
     get data() { return state.data; },

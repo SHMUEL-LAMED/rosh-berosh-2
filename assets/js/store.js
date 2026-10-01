@@ -9,6 +9,7 @@
 
   const LS = {
     sb: 'rosh:cf:session',          // סשן ההתחברות
+    remembered: 'rosh:remember-login', // כבר התחברו כאן — משחזרים מהכניסה הקיימת בביקור הבא
     preview: 'rosh:preview',        // קישור תצוגה מקדימה (sessionStorage)
     sso: 'rosh:sso-checked',        // מתי נבדק לאחרונה אם מחוברים באתר הסקר
   };
@@ -279,7 +280,7 @@
     // כשהניהול מוטמע בתוך אתר הסקר, אחסון הדפדפן עלול להיות חסום — הסשן נשמר גם בזיכרון
     _mem: null,
     get session() { return read(LS.sb, null) ?? this._mem; },
-    set session(v) { this._mem = v; write(LS.sb, v); },
+    set session(v) { this._mem = v; write(LS.sb, v); if (v?.token) write(LS.remembered, true); },
     get user() { return this.session?.user || null; },
     base(path) { return `${this.cfg.apiBase.replace(/\/$/, '')}${path}`; },
     headers(auth = true) {
@@ -323,6 +324,7 @@
     signOut(after) {
       const token = this.session?.token;
       this.session = null;
+      write(LS.remembered, null);
       write(LS.sso, Date.now());
       if (token && this.configured) Promise.resolve(after).catch(() => {}).then(() => fetch(this.base('/api/program/logout'), { method:'POST', headers:{ Authorization:`Bearer ${token}` } })).catch(() => {});
     },
@@ -526,12 +528,12 @@
   let readyResolve;
   const ready = new Promise((res) => { readyResolve = res; });
 
-  /** צריך לבדוק באתר הסקר אם כבר מחוברים שם? רק באזור האישי ובניהול, בלי
+  /** צריך לבדוק באתר הסקר אם כבר מחוברים שם? למשתמש חוזר בכל הדפים, ולאורח באזור האישי ובניהול, בלי
       סשן כאן, ולא יותר מפעם בכמה שעות (ופעם בכל ביקור). בשאר הדפים לא בודקים
       בכלל — כדי שהטעינה הראשונה תהיה מיידית, בלי מעבר לאתר הסקר וחזרה. */
   async function needsSso(params) {
     if (!sb.configured || sb.session?.token || state.embed || params.has('preview')) return false;
-    if (!/(?:me|admin|mail)\.html$/.test(location.pathname)) return false;
+    if (!read(LS.remembered, false) && !/(?:me|admin|mail)\.html$/.test(location.pathname)) return false;
     let here = false; try { here = location.origin === new URL(state.site.url).origin || !!localStorage.getItem('rosh:sso-test'); } catch { /* */ }
     if (!here || /bot|crawl|spider|preview/i.test(navigator.userAgent || '')) return false;
     const last = Number(read(LS.sso, 0)) || 0;
@@ -628,8 +630,22 @@
     } catch { /* */ }
     // מחוברים כאן? מוודאים מול השרת ברקע (התנתקות באתר הסקר מנתקת גם כאן),
     // בלי לעכב את הדף: הכותרת מתעדכנת כשהתשובה מגיעה.
+    // גם מי שהתחבר לפני הוספת סימון השחזור נחשב משתמש חוזר.
+    if (sb.session?.token) write(LS.remembered, true);
     const verify = sb.configured && sb.session?.token
-      ? sb.isAdmin().catch(() => {}).then(() => { if (!sb.session?.token) me.reset(); sessionChanged(); })
+      ? sb.isAdmin().catch(() => {}).then(async () => {
+        if (!sb.session?.token) {
+          me.reset();
+          // הטוקן המקומי נדחה, אבל ייתכן שהכניסה באתר הסקר עדיין תקפה.
+          // משחזרים דרך קוד חד־פעמי; השרת ממשיך לאמת את המשתמש.
+          if (await needsSso(new URLSearchParams(location.search))) {
+            write(LS.sso, Date.now());
+            location.replace(`${sb.base('/api/program/sso')}?return=${encodeURIComponent(location.href)}`);
+            return;
+          }
+        }
+        sessionChanged();
+      })
       : Promise.resolve();
     state.verified = verify;
     // הנתונים האישיים נטענים מהחשבון במקביל לקטלוג (לכל היותר 2.5 שניות המתנה)

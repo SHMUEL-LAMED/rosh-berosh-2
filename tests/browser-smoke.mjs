@@ -29,7 +29,8 @@ if (!process.env.STREAM) {
   wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22); wav.writeUInt32LE(rate, 24); wav.writeUInt32LE(rate, 28);
   wav.writeUInt16LE(1, 32); wav.writeUInt16LE(8, 34); wav.write('data', 36); wav.writeUInt32LE(len, 40);
   await ctx.route('**/api/program/stream/**', (route) => {
-    const m = /bytes=(\d+)-(\d*)/.exec(route.request().headers().range || '');
+    if (globalThis.streamDown) return route.abort();   // השרת לא זמין
+    const m =/bytes=(\d+)-(\d*)/.exec(route.request().headers().range || '');
     const start = m ? Number(m[1]) : 0, end = m && m[2] ? Math.min(Number(m[2]), wav.length - 1) : wav.length - 1;
     return route.fulfill({ status: m ? 206 : 200, headers: { 'access-control-allow-origin': '*', 'accept-ranges': 'bytes', 'content-type': 'audio/wav', ...(m ? { 'content-range': `bytes ${start}-${end}/${wav.length}` } : {}) }, body: wav.subarray(start, end + 1) });
   });
@@ -150,6 +151,37 @@ await page.evaluate(() => window.RoshPlayer.pause());
 await page.evaluate(() => document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'ל', code: 'KeyK', bubbles: true })));
 check(!(await page.evaluate(() => window.RoshPlayer.paused)), 'הקיצור K עובד גם במקלדת בעברית (לפי המקש הפיזי)');
 await page.evaluate(() => window.RoshPlayer.pause());
+// המהירות שנבחרה נשארת גם אחרי מעבר לתוכנית אחרת (load() מחזיר את playbackRate לברירת המחדל)
+{
+  const rate = await page.evaluate(async () => {
+    const Pl = window.RoshPlayer, ld = HTMLMediaElement.prototype.load;
+    let el = null; HTMLMediaElement.prototype.load = function () { el = this; return ld.call(this); };
+    Pl.setRate(1.5);
+    Pl.load(window.RoshStore.episodes().find((e) => e.stream && !Pl.isCurrent(e.id)), { at: 0, autoplay: false });
+    HTMLMediaElement.prototype.load = ld;
+    const r = el?.playbackRate; Pl.setRate(1); return r;
+  });
+  check(rate === 1.5, `המהירות שנבחרה נשמרת במעבר לתוכנית אחרת (${rate})`);
+}
+// אחרי סגירת הנגן (✕), ניגון מחדש (רווח) פותח שוב את הנגן — לא מנגן בלי נגן גלוי
+await page.click('.dock [data-close]');
+await page.evaluate(() => document.activeElement?.blur?.());
+await page.keyboard.press('Space');
+check(await page.evaluate(() => !window.RoshPlayer.paused && !!document.querySelector('.dock.open')), 'ניגון אחרי סגירת הנגן פותח אותו שוב');
+await page.evaluate(() => window.RoshPlayer.pause());
+// ההקלטה לא נטענה: הנגן נעצר עם הודעה אחת, ו־▶ טוען אותה מחדש כשהשרת חוזר
+if (!process.env.STREAM) {
+  await page.evaluate(() => { window.__errNotices = 0; new MutationObserver((list) => { for (const m of list) for (const n of m.addedNodes) if (n.classList?.contains('notice-error')) window.__errNotices++; }).observe(document.body, { childList: true, subtree: true }); });
+  globalThis.streamDown = true;
+  await page.evaluate(() => { const Pl = window.RoshPlayer; Pl.load(window.RoshStore.episodes().find((e) => e.stream && !Pl.isCurrent(e.id)), { at: 0 }); });
+  const stopped = await page.waitForFunction(() => window.__errNotices > 0 && window.RoshPlayer.paused && document.querySelector('.dock [data-toggle]').dataset.state === 'paused', null, { timeout: 15000 }).then(() => true, () => false);
+  await page.waitForTimeout(1000);
+  check(stopped && await page.evaluate(() => window.__errNotices === 1), 'הקלטה שלא נטענה: הנגן מוצג כעצור, עם הודעת שגיאה אחת');
+  globalThis.streamDown = false;
+  await page.click('.dock [data-toggle]');
+  check(await page.waitForFunction(() => !window.RoshPlayer.paused && window.RoshPlayer.time > 0.3, null, { timeout: 10000 }).then(() => true, () => false), 'אחרי שגיאת טעינה, ▶ מנגן שוב כשהשרת חזר');
+  await page.evaluate(() => window.RoshPlayer.pause());
+}
 // קישור "#" שהדף מטפל בו (כמו "כניסה בחלון נפרד" באזור האישי) אינו ניווט: הדף לא נטען מחדש
 const urlBeforeHash = page.url();
 await page.evaluate(() => {

@@ -347,11 +347,12 @@
     },
     /* כניסה ישירה עם Google מתוך האתר (בלי דף ביניים): כפתור Google נטען
        לתוך אלמנט, והאישור נשלח ל־Worker שמחזיר סשן. */
-    async google(el, { onDone, onError } = {}) {
+    async google(el, { onDone, onError, oneTap = false } = {}) {
       const clientId = this.cfg?.googleClientId;
-      if (!clientId || !el) throw new Error('כניסה עם Google אינה מוגדרת באתר הזה.');
+      if (!clientId || (!el && !oneTap)) throw new Error('כניסה עם Google אינה מוגדרת באתר הזה.');
       await this.loadGoogle();
-      window.google.accounts.id.initialize({
+      this._googleCallbacks = { onDone, onError };
+      if (!this._googleInitialized) window.google.accounts.id.initialize({
         client_id: clientId, ux_mode: 'popup', auto_select: false, itp_support: true,
         callback: async ({ credential }) => {
           try {
@@ -367,10 +368,13 @@
             if (!this.session?.token) throw new Error('ההתחברות לא נשמרה. נסו שוב בעוד רגע.');
             if (await this.shareLogin()) return;
             await signedIn();
-            onDone?.(this.user);
-          } catch (err) { onError?.(err); }
+            this._googleCallbacks?.onDone?.(this.user);
+          } catch (err) { this._googleCallbacks?.onError?.(err); }
         },
       });
+      this._googleInitialized = true;
+      if (oneTap && !this.user) window.google.accounts.id.prompt();
+      if (!el) return;
       el.innerHTML = '';
       window.google.accounts.id.renderButton(el, { theme: 'filled_black', size: 'large', shape: 'pill', text: 'continue_with', locale: 'he', width: 280 });
     },
@@ -1093,5 +1097,6 @@
     get settings() { return state.data.settings || { banner: null, updates: [] }; },
   };
 
+  ready.then(() => window.RoshUI?.offerLogin()).catch(() => {});
   load();
 })();

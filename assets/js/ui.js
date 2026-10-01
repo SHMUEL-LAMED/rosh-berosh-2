@@ -698,5 +698,48 @@
     mountSubscribe(host);
   });
 
-  window.RoshUI = { newUpdates, markUpdatesSeen, banner, messageForm, mountSubscribe, esc, fmtTime, parseTime, fmtDuration, fmtDate, fmtHebDate, fmtWeekday, slugify, qs, header, footer, repaintHeader, actionButtons, paintActions, push, notify, kbdHelp, isTyping, copy, driveId, isDriveUrl, streamUrl, streamCandidates, downloadUrl, shareUrl, publicLinks, coverVars, hue, seasonVars, epCard, reveal, pauseOffscreen, countUp, eqBars, reduceMotion, applyPrefs };
+
+  /* הצעה להתחבר: פעם אחת בכל ביקור, רק למי שעוד לא מחובר. */
+  async function offerLogin() {
+    const S = window.RoshStore;
+    await S.state.verified;
+    if (S.sb.user || !S.sb.configured || S.state.embed || S.state.preview || S.state.live || window.top !== window) return;
+    if (/(?:admin|mail)\.html$/.test(location.pathname)) return;
+    try { if (sessionStorage.getItem('rosh:login-offered')) return; sessionStorage.setItem('rosh:login-offered', '1'); } catch { /* אחסון חסום */ }
+    if (document.getElementById('login-welcome')) return;
+    const d = document.createElement('dialog');
+    d.id = 'login-welcome'; d.className = 'sheet';
+    d.style.cssText = 'width:min(480px,calc(100vw - 32px));max-height:90dvh;overflow:auto';
+    d.setAttribute('aria-labelledby', 'login-welcome-title');
+    d.setAttribute('aria-describedby', 'login-welcome-desc');
+    d.innerHTML = `<div class="section-title"><div><p class="kicker">האזור האישי שלכם</p><h2 id="login-welcome-title">כדאי להתחבר לראש בראש</h2></div><button type="button" class="icon-btn" data-dismiss aria-label="סגירת הצעת ההתחברות">✕</button></div>
+<div class="card-body"><p id="login-welcome-desc">מתחברים עם חשבון Google ושומרים את כל ההאזנות במקום אחד.</p>
+<ul style="line-height:1.9;padding-inline-start:24px"><li>ממשיכים להאזין בדיוק מהמקום שעצרתם.</li><li>שומרים תוכניות שאהבתם ותוכניות להאזנה בהמשך.</li><li>ההיסטוריה וההעדפות זמינות גם במכשיר אחר.</li></ul>
+<p class="cue-hint">ההתחברות בחינם. אפשר גם להמשיך להאזין בלי להתחבר.</p>
+<div data-welcome-google style="display:flex;justify-content:center;margin:20px 0"></div>
+<p data-login-error role="status" class="cue-hint"></p>
+<button type="button" class="btn" data-fallback>התחברות עם Google בחלון נפרד</button></div>
+<div class="card-foot"><button type="button" class="btn ghost" data-dismiss>אולי אחר כך — להמשיך באתר</button></div>`;
+    document.body.appendChild(d);
+    const oneTap = () => {
+      if (!S.sb.user) S.sb.google(null, { oneTap: true, onError: (e) => notify(e.message, 'error') }).catch(() => {});
+    };
+    let off = () => {};
+    const close = (suggest = true) => { if (!d.isConnected) return; d.close(); d.remove(); off(); if (suggest) oneTap(); };
+    off = S.onSession((user) => { if (user) close(false); });
+    d.addEventListener('cancel', (e) => { e.preventDefault(); close(); });
+    d.addEventListener('click', async (e) => {
+      if (e.target === d || e.target.closest('[data-dismiss]')) { close(); return; }
+      const b = e.target.closest('[data-fallback]');
+      if (!b) return;
+      b.disabled = true;
+      try { await S.sb.signIn(); close(false); }
+      catch (err) { if (d.isConnected) { d.querySelector('[data-login-error]').textContent = err.message; b.disabled = false; } }
+    });
+    d.showModal();
+    try { await S.sb.google(d.querySelector('[data-welcome-google]'), { onDone: () => close(false), onError: (e) => { if (d.isConnected) d.querySelector('[data-login-error]').textContent = e.message; } }); }
+    catch (e) { if (d.isConnected) d.querySelector('[data-login-error]').textContent = 'אפשר להתחבר באמצעות הכפתור שמתחת.'; }
+  }
+
+  window.RoshUI = { offerLogin, newUpdates, markUpdatesSeen, banner, messageForm, mountSubscribe, esc, fmtTime, parseTime, fmtDuration, fmtDate, fmtHebDate, fmtWeekday, slugify, qs, header, footer, repaintHeader, actionButtons, paintActions, push, notify, kbdHelp, isTyping, copy, driveId, isDriveUrl, streamUrl, streamCandidates, downloadUrl, shareUrl, publicLinks, coverVars, hue, seasonVars, epCard, reveal, pauseOffscreen, countUp, eqBars, reduceMotion, applyPrefs };
 })();

@@ -338,9 +338,9 @@
     <nav class="mc-quickflow" aria-label="המסלול המהיר ליצירת טיוטה">
       <p class="mc-quickflow-title">יוצרים טיוטה בשלושה שלבים</p>
       <div class="mc-steps">
-        <button type="button" class="mc-step" data-mstep="content" data-mtab="content" aria-pressed="${st.tab === 'content'}"><i>1</i><span><b>תוכן</b><small>נושא ונוסח</small></span></button>
-        <button type="button" class="mc-step" data-mstep="people" data-mtab="people" aria-pressed="${st.tab === 'people'}"><i>2</i><span><b>נמענים</b><small>מי יקבל את הטיוטה</small></span></button>
-        <button type="button" class="mc-step" data-mstep="check" data-mtab="check" aria-pressed="${st.tab === 'check'}"><i>3</i><span><b>בדיקה</b><small>עוברים על המייל לפני יצירה</small></span></button>
+        <button type="button" class="mc-step" data-mstep="content" aria-pressed="${st.tab === 'content'}"><i>1</i><span><b>תוכן</b><small>נושא ונוסח</small></span></button>
+        <button type="button" class="mc-step" data-mstep="people" aria-pressed="${st.tab === 'people'}"><i>2</i><span><b>נמענים</b><small>מי יקבל את הטיוטה</small></span></button>
+        <button type="button" class="mc-step" data-mstep="check" aria-pressed="${st.tab === 'check'}"><i>3</i><span><b>בדיקה</b><small>עוברים על המייל לפני יצירה</small></span></button>
       </div>
       <p class="mc-quickflow-note">אחרי הבדיקה יוצרים טיוטה בג׳ימייל; המייל לא נשלח מכאן.</p>
     </nav>
@@ -1052,6 +1052,7 @@
       if (!ev.target.closest('details.mc-menu')) closeMenus();
       const b = ev.target.closest('button'); if (!b || !root.contains(b)) return;
       if (b.dataset.mkind) { setKind(b.dataset.mkind); return; }
+      if (b.dataset.mstep) { showTab(b.dataset.mstep); return; }
       if (b.dataset.mtab) { showTab(b.dataset.mtab); return; }
       if (b.dataset.mgo) { showTab(b.dataset.mgo); $(`[data-panel="${b.dataset.mgo}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); return; }
       if (b.dataset.mstyle) { st.opts.style = b.dataset.mstyle; st.opts.accent = ''; renderPanel('design'); save(); preview(); $(`[data-mstyle="${b.dataset.mstyle}"]`)?.focus(); return; }

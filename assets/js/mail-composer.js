@@ -942,7 +942,7 @@
     function showTab(k) {
       if (!TABS.some(([t]) => t === k)) return;
       st.tab = k;
-      $$('[data-mtab]').forEach((b) => { const on = b.dataset.mtab === k; b.setAttribute('aria-selected', String(on)); b.tabIndex = on ? 0 : -1; });
+      $$('[role="tab"][data-mtab]').forEach((b) => { const on = b.dataset.mtab === k; b.setAttribute('aria-selected', String(on)); b.tabIndex = on ? 0 : -1; });
       $$('[data-panel]').forEach((p) => { p.hidden = p.dataset.panel !== k; });
       $$('[data-mstep]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mstep === k)));
       if (k === 'history') checkHistory(false);

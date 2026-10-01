@@ -66,6 +66,19 @@ await page.waitForFunction(() => document.querySelector('.dock [data-mute]').dat
 check(await page.evaluate(() => window.RoshPlayer.muted), 'כפתור ההשתקה בנגן');
 await page.click('.dock [data-mute]');
 check(!(await page.evaluate(() => window.RoshPlayer.muted)), 'לחיצה נוספת מבטלת את ההשתקה');
+// שם תוכנית עם רווח מיותר ("…מוזיקה "): הכותרת בלשונית בזמן ניגון לא נכנסת ללולאה שתוקעת את הדף
+{
+  const title = page.evaluate(() => {
+    const ep = window.RoshPlayer.episode, was = ep.title;
+    ep.title = `${was.trim()}  בדיקה `;
+    window.RoshPlayer.play();
+    document.title = 'דף אחר';   // כמו מעבר בין דפים
+    return new Promise((r) => setTimeout(() => { const t = document.title; ep.title = was; r(t); }, 300));
+  });
+  const shown = await Promise.race([title, new Promise((r) => setTimeout(() => r(null), 5000))]);
+  check(!!shown && shown.startsWith('▶ ') && shown.includes('בדיקה'), `שם תוכנית עם רווח מיותר לא תוקע את הדף בזמן ניגון${shown ? '' : ' (הדף נתקע)'}`);
+  if (!shown) { console.error('הדף נתקע — עוצרים כאן'); process.exit(1); }
+}
 const apiBase = await page.evaluate(() => window.RoshStore.site?.storage?.cloudflare?.apiBase || '');
 const src = await page.evaluate(() => window.RoshPlayer.src);
 check(apiBase ? src.startsWith(`${apiBase}/api/program/stream/`) : /^https:\/\/drive\.usercontent\.google\.com\//.test(src), 'הנגן מזרים דרך ה־Worker (בלי נגן חיצוני)');

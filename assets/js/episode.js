@@ -191,6 +191,16 @@ ${nb.newer ? `<a href="episode.html?ep=${encodeURIComponent(nb.newer.slug)}" cla
   // סקר של התוכנית: בולט, מיד אחרי הפתיחה. בלי סקר — לא מוצג כלום.
   window.RoshPolls?.mount(document.getElementById('ep-polls'), window.RoshPolls.forPlace('episode', ep), { featured: true });
 
+  // קישור ישיר לסקר: אזור הסקר נוצר אחרי טעינת הקטלוג, ולכן גוללים רק אחרי הציור.
+  if (location.hash === '#ep-polls') {
+    const scrollToPoll = () => {
+      const zone = document.getElementById('ep-polls');
+      if (!signal?.aborted && zone && !zone.hidden) zone.scrollIntoView({ block: 'start', behavior: 'instant' });
+    };
+    requestAnimationFrame(scrollToPoll);
+    document.fonts?.ready.then(scrollToPoll);
+  }
+
   U.reveal();
 
   /* ---------- תגובות המאזינים ----------

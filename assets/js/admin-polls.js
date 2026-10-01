@@ -141,7 +141,7 @@
   /* ---------- חלון היצירה והעריכה ---------- */
   let E = null;   // { draft, isNew, dirty, mode: 'vote'|'results', device: 'desk'|'phone', target, epQuery }
   // עדכון בכוח (app-update.js) מחכה כל עוד יש בעורך שינויים שלא נשמרו
-  (window.RoshBusy = window.RoshBusy || []).push(() => !!E?.dirty);
+  (window.RoshBusy = window.RoshBusy || []).push(() => !!E?.dirty || !!E?.uploading);
 
   function open(poll, preset) {
     const isNew = !poll;
@@ -362,12 +362,16 @@ ${E.isNew && !p.question && filled(p).length === 0 ? `<section class="pe-sec pe-
     const bar = box?.querySelector('.pe-progress');
     if (bar) { bar.hidden = false; bar.textContent = '0%'; }
     box?.classList.add('busy');
+    // החלון עלול להיסגר או להתחלף בזמן ההעלאה — עובדים על העורך שבו התחילה; שמירה וסגירה מחכות לה
+    const ed = E; ed.uploading = (ed.uploading || 0) + 1;
     try {
-      const url = await window.RoshUpload(file, `poll-${E.draft.id}`, 'cover', (pct) => { if (bar) bar.textContent = `${pct}%`; });
+      const url = await window.RoshUpload(file, `poll-${ed.draft.id}`, 'cover', (pct) => { if (bar) bar.textContent = `${pct}%`; });
+      if (E !== ed) return;
       if (target === 'poll') E.draft.image = url; else if (E.draft.options[target]) E.draft.options[target].image = url;
       change(target === 'poll');
       if (target !== 'poll') repaintOpts();
     } catch (err) { U.notify(`ההעלאה נכשלה: ${err.message}`, 'error'); }
+    finally { ed.uploading--; }
     box?.classList.remove('busy');
     if (bar) bar.hidden = true;
   }
@@ -505,13 +509,20 @@ ${E.isNew && !p.question && filled(p).length === 0 ? `<section class="pe-sec pe-
   }
 
   function close() {
+    if (E?.uploading) { U.notify('התמונה עוד עולה — רגע…', 'info'); return; }
     if (E?.dirty && !confirm('יש שינויים שלא נשמרו. לסגור בלי לשמור?')) return;
     const d = document.getElementById('dlg-poll');
     d?.close(); d?.remove();
     E = null;
   }
   function save() {
+    if (E.uploading) { U.notify('התמונה עוד עולה — רגע…', 'info'); return; }
     const p = E.draft;
+    // רווחים מיותרים לא נשמרים (שם עם רווח בסוף הפיל את האתר)
+    const tidy = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
+    ['question', 'title', 'thanks', 'buttonLabel'].forEach((k) => { p[k] = tidy(p[k]); });
+    p.description = String(p.description ?? '').split('\n').map((l) => l.replace(/[^\S\n]+/g, ' ').trim()).join('\n').trim();
+    p.options.forEach((o) => { o.label = tidy(o.label); o.sub = tidy(o.sub); });
     const issues = problems(p);
     if (p.enabled && issues.length && !confirm(`${issues.join(', ')}.\nהסקר יישמר, אבל לא יוצג באתר עד שזה יתוקן. לשמור?`)) return;
     p.options = p.options.filter((o) => o.label.trim() || o.image);
@@ -526,6 +537,7 @@ ${E.isNew && !p.question && filled(p).length === 0 ? `<section class="pe-sec pe-
     U.notify(`הסקר נשמר בטיוטה. הוא ${clean.enabled ? 'יעלה לאתר' : 'יישמר (כבוי)'} בלחיצה על "פרסום לאתר".`, 'success');
   }
   function remove(id, fromEditor = false) {
+    if (fromEditor && E?.uploading) { U.notify('התמונה עוד עולה — רגע…', 'info'); return; }
     const p = polls().find((x) => x.id === id); if (!p) { if (fromEditor) { E.dirty = false; close(); } return; }
     if (!confirm(`למחוק את הסקר "${p.question || p.title || 'בלי שאלה'}"? ההצבעות שכבר נאספו יישארו בשרת, אבל הסקר ייעלם מהאתר בפרסום הבא.`)) return;
     B().data.settings.polls = polls().filter((x) => x.id !== id);

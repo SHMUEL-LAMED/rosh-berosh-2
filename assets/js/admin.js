@@ -57,6 +57,7 @@
     overwrite: false,      // בחרו "להמשיך עם שלי ולדרוס"
     echoRetry: false,
     lastSent: '',          // הטיוטה האחרונה ששלחנו (לזהות 409 על שמירה שלנו שהתשובה שלה אבדה)
+    unacked: [],           // כל מה ששלחנו מאז השמירה האחרונה שאושרה — שמירה שהתשובה שלה אבדה ואחריה ערכו עוד
     publishing: false,
     checks: { audio: null, media: null },  // תוצאות הבדיקות
     versions: null,        // רשימת הגרסאות מהשרת
@@ -123,10 +124,11 @@
       sent = JSON.stringify(body);
       A.unsynced = false;   // עריכה בזמן השמירה תסמן שוב
       A.lastSent = sent;
+      A.unacked.push(sent); if (A.unacked.length > 5) A.unacked.shift();
       const r = await S.sb.draft.put(body, A.overwrite ? undefined : A.draftAt ?? undefined);
       if (gen !== A.syncGen) return false;
       A.draftAt = r.updatedAt ?? null; A.draftBy = r.by || S.sb.user?.email || '';
-      A.overwrite = false; A.syncState = 'saved'; A.retryDelay = 0; A.echoRetry = false;
+      A.overwrite = false; A.syncState = 'saved'; A.retryDelay = 0; A.echoRetry = false; A.unacked = [];
       if (A.offline) { A.offline = false; U.notify('החיבור חזר — השינויים נשמרו בשרת.', 'success'); }
       if (A.unsynced) scheduleSync();
       return true;
@@ -150,10 +152,10 @@
       return false;
     } finally { paintStatus(); }
   }
-  /** טיוטה בשרת שהיא בעצם השמירה האחרונה שלנו (התשובה אבדה בדרך, או נשלחה בסגירת הדף) */
+  /** טיוטה בשרת שהיא בעצם שמירה שלנו (התשובה אבדה בדרך — אולי כבר ערכו מאז — או נשלחה בסגירת הדף) */
   function ownEcho(draft) {
-    if (!A.lastSent || (draft.by && draft.by !== S.sb.user?.email)) return false;
-    try { return sameData(draft.data, JSON.parse(A.lastSent)); } catch { return false; }
+    if (draft.by && draft.by !== S.sb.user?.email) return false;
+    return [A.lastSent, ...A.unacked].filter(Boolean).some((s) => { try { return sameData(draft.data, JSON.parse(s)); } catch { return false; } });
   }
   function onDraftConflict(draft) {
     A.conflict = draft; A.unsynced = true; A.overwrite = false;
@@ -199,6 +201,8 @@
   /* סגירת הדף עם שינויים שעוד לא נשמרו: שולחים אותם בבקשה שממשיכה גם אחרי הסגירה
      (כשהטיוטה קטנה מספיק); אחרת הדפדפן שואל אם לעזוב. במכשיר עצמו לא נשמר כלום. */
   window.addEventListener('beforeunload', (ev) => {
+    // העלאה או עבודה שרצה הייתה נקטעת ביציאה — הדפדפן שואל אם לעזוב
+    if (A.uploads > 0 || jobsBusy()) { ev.preventDefault(); ev.returnValue = ''; return; }
     if (!A.unsynced && !A.syncing) return;
     if (canSync() && !A.conflict && !A.publishing && !A.offline) {
       const body = { ...A.data, baseVersion: A.base ?? null };
@@ -389,7 +393,7 @@
     $('#dlg-draft')?.close();
     Object.assign(A, {
       data: clone(S.data), origin: null, originError: false, base: null, selected: null, bulk: false,
-      unsynced: false, offline: false, syncState: '', retryDelay: 0, draftAt: null, draftBy: '', conflict: null, overwrite: false, echoRetry: false, lastSent: '',
+      unsynced: false, offline: false, syncState: '', retryDelay: 0, draftAt: null, draftBy: '', conflict: null, overwrite: false, echoRetry: false, lastSent: '', unacked: [],
       checks: { audio: null, media: null }, versions: null, stats: null, messages: null, admins: null, subs: null, surveys: null, comments: null, pushCount: null, statsEp: '', proof: null,
       seenPrev: undefined, since: null, live: false, inboxEp: '', inboxFilter: 'todo', share: null,
     });
@@ -466,10 +470,14 @@
     if (!cuts.length || cuts.some((r, i) => !Number.isFinite(r.start) || !Number.isFinite(r.end) || r.start < 0 || r.end - r.start < .2 || r.end > audio.duration + 2 || i && r.start < cuts[i - 1].end)) {
       U.notify('תקנו את זמני הקטעים: התחלה לפני הסוף, בלי חפיפה ובתחומי התוכנית.', 'error'); return;
     }
+    // הקובץ שחותכים הוא ההקלטה שבתוכנית עכשיו: המפתח שלה באחסון, או — לקובץ שהועלה מכאן — הנתיב שאחרי /media/
+    const media = (() => { try { const u = new URL(episode.audio); return u.origin === new URL(S.sb.cfg.apiBase).origin && u.pathname.startsWith('/media/') ? decodeURIComponent(u.pathname.slice(7)) : ''; } catch { return ''; } })();
+    const sourceKey = episode.r2Key || media;
+    if (!sourceKey) { U.notify('ההקלטה הזו עוד לא באחסון של האתר, ולכן אי אפשר לחתוך אותה מכאן.', 'error'); return; }
     if (!confirm(`לחתוך ${cuts.length} קטעים מהתוכנית ״${label(episode)}״ ולפרסם הקלטה נקייה? ההקלטה המקורית תישמר.`)) return;
     ad.busy = true; ad.error = ''; renderAds();
     try {
-      const result = await S.sb.call('/api/program/audio/cut', { method: 'POST', body: { episodeId: episode.id, sourceKey: episode.r2Key, duration: audio.duration, cuts } });
+      const result = await S.sb.call('/api/program/audio/cut', { method: 'POST', body: { episodeId: episode.id, sourceKey, duration: audio.duration, cuts } });
       episode.audio = result.url; episode.r2Key = result.key; episode.audioSource = 'r2'; episode.duration = Math.round(result.duration);
       touch();
       ad.ranges = []; ad.suggestions = (ad.suggestions || []).filter((x) => x.episodeId !== episode.id);
@@ -492,9 +500,56 @@
 
   function uniqueSlug(base, selfId) {
     const root = slugify(base) || 'episode';
+    // גם כתובת של תוכנית שעדיין באתר (נמחקה רק בטיוטה) תפוסה — "פרסום של תוכנית אחת" לא ישים שתיים על אותה כתובת
+    const taken = new Set([...A.data.episodes, ...(A.origin?.episodes || [])].filter((x) => x.id !== selfId).map((x) => x.slug));
     let s = root, n = 2;
-    while (A.data.episodes.some((x) => x.slug === s && x.id !== selfId)) s = `${root}-${n++}`;
+    while (taken.has(s)) s = `${root}-${n++}`;
     return s;
+  }
+  /* ---------- רווחים: שם עם רווח בסוף הפיל את האתר. כל טקסט נשמר נקי — כשמסיימים לערוך שדה, ושוב לפני הפרסום ---------- */
+  const tidyText = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
+  /** טקסט של כמה שורות (תיאור, עדכון): השורות נשארות, הרווחים בקצוות של כל שורה יורדים */
+  const tidyLines = (s) => String(s ?? '').replace(/\r\n?/g, '\n').split('\n').map((l) => l.replace(/[^\S\n]+/g, ' ').trim()).join('\n').trim();
+  /** מנקה את כל הטקסטים בטיוטה (תוכניות, עונות, הודעה, עדכונים, פרטי קשר, אורחים, מגישים, סקרים); מחזיר true אם משהו השתנה */
+  function tidyData(data) {
+    const before = JSON.stringify(data);
+    const f = (o, k, fn = tidyText) => { if (o && typeof o[k] === 'string') o[k] = fn(o[k]); };
+    const list = (o, k) => { if (o && Array.isArray(o[k])) o[k] = o[k].map(tidyText).filter(Boolean); };
+    const links = (o) => (Array.isArray(o?.links) ? o.links : []).forEach((l) => { f(l, 'label'); f(l, 'url'); });
+    for (const e of data.episodes || []) {
+      f(e, 'title'); f(e, 'description', tidyLines); f(e, 'audio'); f(e, 'cover'); f(e, 'thumb');
+      ['tags', 'guests', 'hosts', 'panelists'].forEach((k) => list(e, k)); links(e);
+    }
+    for (const s of data.seasons || []) { f(s, 'title'); f(s, 'note'); }
+    const st = data.settings || {};
+    f(st.banner, 'text'); f(st.banner, 'link'); f(st.banner, 'linkLabel');
+    (st.updates || []).forEach((u) => { f(u, 'title'); f(u, 'text', tidyLines); f(u, 'link'); });
+    for (const k of Object.keys(st.contacts || {})) f(st.contacts, k, /Note$/.test(k) ? tidyLines : tidyText);
+    [...(st.guests || []), ...(st.hosts || [])].forEach((g) => { f(g, 'name'); f(g, 'role'); f(g, 'bio', tidyLines); links(g); });
+    (st.polls || []).forEach((p) => { f(p, 'question'); f(p, 'title'); f(p, 'description', tidyLines); f(p, 'thanks'); f(p, 'buttonLabel'); (p.options || []).forEach((o) => { f(o, 'label'); f(o, 'sub'); }); });
+    return JSON.stringify(data) !== before;
+  }
+  /** שדה טקסט שסיימו לערוך: הרווחים המיותרים יורדים גם מהשדה עצמו. מחזיר true אם הערך השתנה */
+  function tidyField(t) {
+    if (!(t.tagName === 'TEXTAREA' || t.type === 'text' || t.type === 'url' || t.type === 'email')) return false;
+    const v = t.tagName === 'TEXTAREA' ? tidyLines(t.value) : tidyText(t.value);
+    if (v === t.value) return false;
+    t.value = v;
+    return true;
+  }
+  /** ההקלטה הוחלפה: השדות שתיארו את הקובץ הקודם באחסון (המפתח, הגודל) כבר לא נכונים — אחרת ניקוי הפרסומות היה חותך את ההקלטה הישנה */
+  function resetAudioSource(e, size = 0) {
+    Object.assign(e, { r2Key: '', audioSource: '', audioSize: size, audioMigratedAt: '', sourceFileBytes: 0 });
+  }
+  /** ציור מחדש של העורך בלי לאבד את המקלדת: השדה שכתבו בו (והסמן) חוזרים אחרי הציור */
+  function renderEditorKeep() {
+    const a = document.activeElement, { f, lf, i } = a?.dataset || {};
+    const sel = f ? `[data-f="${f}"]` : lf ? `[data-lf="${lf}"][data-i="${i}"]` : '';
+    const val = a?.value, s = a?.selectionStart, en = a?.selectionEnd;
+    renderEditor();
+    const el = sel && P.querySelector(sel); if (!el) return;
+    el.focus({ preventScroll: true });
+    try { if (el.value !== val) el.value = val; if (s != null) el.setSelectionRange(s, en); } catch { /* שדה בלי סמן (תאריך, מספר) */ }
   }
   function uniqueSeasonId(base) {
     const root = slugify(base) || 'season';
@@ -864,7 +919,7 @@ ${epStatsCard(e)}
   const schedulePreview = () => { clearTimeout(A.previewTimer); A.previewTimer = setTimeout(() => { renderPreview(); renderList(); }, 200); };
 
   function newEpisode() {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = S.todayIL();   // שעון ישראל: אחרי חצות התוכנית לא מקבלת את התאריך של אתמול (וכתובת "-2")
     const maxNum = A.data.episodes.reduce((m, e) => Math.max(m, e.number || 0), 0);
     const latestSeason = A.data.seasons.slice().sort((a, b) => (b.year || 0) - (a.year || 0))[0];
     const e = { id: `ep-${Date.now().toString(36)}`, slug: '', number: maxNum + 1, season: latestSeason?.id || '', title: '', date: today, description: '', cover: '', audio: '', duration: 0, tags: [], hosts: [], guests: [], panelists: [], links: [], featured: false, visible: true, tracks: [], publishAt: '' };
@@ -882,11 +937,11 @@ ${epStatsCard(e)}
     A.data.episodes.unshift(c); touch(); select(c.id); U.notify('התוכנית שוכפלה. זה העותק — ערכו אותו.', 'success');
   }
   function removeMany(ids) {
-    const gone = [];
-    ids.forEach((id) => { const i = A.data.episodes.findIndex((x) => x.id === id); if (i >= 0) gone.push({ i, e: A.data.episodes.splice(i, 1)[0] }); });
+    // המקומות נמדדים לפני ההסרה ומסירים מהסוף — כך "ביטול" מחזיר כל תוכנית בדיוק למקומה (ולא פעמיים, אם הטיוטה הוחלפה בינתיים)
+    const gone = ids.map((id) => A.data.episodes.findIndex((x) => x.id === id)).filter((i) => i >= 0).sort((a, b) => b - a).map((i) => ({ i, e: A.data.episodes.splice(i, 1)[0] }));
     if (gone.some((g) => g.e.id === A.selected)) A.selected = null;
     A.picked.clear(); touch(); renderList(); renderEditor();
-    U.notify(gone.length === 1 ? `"${label(gone[0].e)}" נמחקה.` : `${gone.length} תוכניות נמחקו.`, 'success', { action: 'ביטול', ttl: 9000, onAction: () => { gone.sort((a, b) => a.i - b.i).forEach((g) => A.data.episodes.splice(g.i, 0, g.e)); touch(); renderList(); renderEditor(); } });
+    U.notify(gone.length === 1 ? `"${label(gone[0].e)}" נמחקה.` : `${gone.length} תוכניות נמחקו.`, 'success', { action: 'ביטול', ttl: 9000, onAction: () => { gone.sort((a, b) => a.i - b.i).forEach((g) => { if (!liveEp(g.e.id)) A.data.episodes.splice(Math.min(g.i, A.data.episodes.length), 0, g.e); }); touch(); renderList(); renderEditor(); } });
   }
   function newSeasonInline(sel) {
     const title = prompt('איך לקרוא לעונה החדשה? (למשל: עונת 2027)');
@@ -953,7 +1008,9 @@ ${s.moments?.top?.length ? `<p class="kicker" style="margin-top:14px">הרגעי
     if (!CLOUD) return;
     if (!A.origin) { U.notify('עוד לא ידוע מה מפורסם באתר. נסו שוב בעוד רגע.', 'info'); return; }
     if (jobsBusy()) { U.notify('ממתינים לסיום העבודה — אחר כך אפשר לפרסם.', 'info'); return; }
+    if (A.uploads > 0) { U.notify('ממתינים לסיום ההעלאה — אחר כך אפשר לפרסם.', 'info'); return; }
     if (A.publishing) return;
+    if (tidyData(A.data)) touch();
     if (!epChanged(e)) { U.notify('התוכנית הזו כבר מפורסמת בדיוק כמו שהיא כאן.', 'info'); return; }
     if (!e.title.trim()) { U.notify('לפני הפרסום צריך לתת לתוכנית שם.', 'error'); goToField('title'); return; }
     const isPublic = (x) => x.visible && !S.scheduled(x);
@@ -967,6 +1024,9 @@ ${s.moments?.top?.length ? `<p class="kicker" style="margin-top:14px">הרגעי
     if (i >= 0) snap.episodes[i] = ne; else snap.episodes.unshift(ne);
     if (ne.featured) snap.episodes.forEach((x) => { if (x.id !== ne.id) x.featured = false; });
     if (ne.season && !snap.seasons.some((s) => s.id === ne.season)) { const sd = A.data.seasons.find((s) => s.id === ne.season); if (sd) snap.seasons.push(clone(sd)); }
+    // תוכנית שנמחקה רק בטיוטה עדיין באתר — שתי תוכניות על אותה כתובת היו מסתירות זו את זו
+    if (snap.episodes.some((x) => x.id !== ne.id && x.slug === ne.slug)) { U.notify('כתובת התוכנית כבר בשימוש באתר — פרסמו את כל השינויים יחד.', 'error'); return; }
+    tidyData(snap);
     if (btn) btn.disabled = true;
     const stop = U.notify('מפרסמים את התוכנית…', 'progress');
     const go = async (force) => {
@@ -975,6 +1035,7 @@ ${s.moments?.top?.length ? `<p class="kicker" style="margin-top:14px">הרגעי
         clearTimeout(A.syncTimer); A.syncTimer = null;
         await A.syncing;
         if (A.conflict) { showDraftConflict(); throw new Error('קודם בחרו מה לעשות עם הטיוטה החדשה שבשרת.'); }
+        if (A.uploads > 0) throw new Error('ממתינים לסיום ההעלאה.');
         const r = await S.sb.push(snap, { removedIds: [], baseVersion: A.base ?? null, force, notify: fresh && A.notify });
         A.origin = S.admin.normalize(snap); A.origin.versionId = r.versionId ?? null; A.base = A.origin.versionId;
         A.originError = false; A.versions = null; A.versionCache.clear();
@@ -1332,7 +1393,7 @@ ${s.moments?.top?.length ? `<p class="kicker" style="margin-top:14px">הרגעי
       U.notify('התמונה ירדה למחשב. העלו אותה לאתר והדביקו את הקישור.', 'info');
     }
     A.coverTry = (A.coverTry || 0) + 1;
-    touch(); renderEditor(); renderList();
+    touch(); renderEditorKeep(); renderList();
   }
   function wrap(x, text, max) {
     const out = []; let line = '';
@@ -1370,7 +1431,7 @@ ${s.moments?.top?.length ? `<p class="kicker" style="margin-top:14px">הרגעי
     };
     await Promise.all(Array.from({ length: Math.min(concurrency, items.length) || 1 }, worker));
     job.running = false; paint(true);
-    renderList(); if (A.tab === 'programs') renderEditor();
+    renderList(); if (A.tab === 'programs') renderEditorKeep();
     const ok = job.done - job.failed;
     const updated = ok === 1 ? one : `${ok} ${what} עודכנו`;
     U.notify(job.stop ? `נעצר: ${updated}.` : `הסתיים: ${updated}${job.failed ? `, ${job.failed} נכשלו` : ''}. לחצו "פרסום" כדי שזה יופיע באתר.`, job.failed ? 'info' : 'success');
@@ -2050,7 +2111,7 @@ ${pushCard()}
     else if (!A.origin) { title = 'רגע…'; text = 'בודקים מה מפורסם באתר.'; }
     else if (!ch.any) { title = 'הכול מפורסם'; text = 'האתר מציג בדיוק את מה שיש כאן. אין מה לפרסם.'; }
     else { title = 'יש שינויים שמחכים לפרסום'; text = 'עד הפרסום, השינויים נראים רק לכם (ולמי שקיבל קישור תצוגה מקדימה).'; }
-    const busy = jobsBusy();
+    const busy = jobsBusy() || A.uploads > 0;   // תוכנית בלי הקלטה לא עולה לאתר (עם התראה) באמצע ההעלאה
     const canPublish = !!ch?.any && !hc.must.length && (CLOUD ? !!u : true) && !busy;
     const fresh = newlyPublic();
     const checkRow = (kind, titleText, hint) => {
@@ -2069,7 +2130,7 @@ ${pushCard()}
     ${CLOUD && !u ? '<p class="problems">כדי לפרסם צריך להיות מחוברים. רעננו את הדף והיכנסו שוב.</p>' : ''}
     <div class="actions">
       <button type="button" class="btn xl primary" data-op="publish" ${canPublish ? '' : 'disabled'}>${CLOUD ? 'פרסום לאתר' : 'הורדת הקובץ לפרסום'} <span>←</span></button>
-      ${busy && ch?.any ? '<span class="cue-hint"><span class="notice-spinner" aria-hidden="true"></span> ממתינים לסיום העבודה</span>' : ''}
+      ${busy && ch?.any ? `<span class="cue-hint"><span class="notice-spinner" aria-hidden="true"></span> ${A.uploads > 0 ? 'ממתינים לסיום ההעלאה' : 'ממתינים לסיום העבודה'}</span>` : ''}
       ${CLOUD && fresh.length ? `<label class="check notify-check"><input type="checkbox" id="pub-notify" ${A.notify ? 'checked' : ''}> לשלוח התראה לטלפון של המאזינים על ${fresh.length === 1 ? 'התוכנית שעולה עכשיו לאתר' : `${fresh.length} התוכניות שעולות עכשיו לאתר`}</label>` : ''}
       ${CLOUD && fresh.length ? `<label class="check mail-check"><input type="checkbox" id="pub-mail" ${A.mailAfter ? 'checked' : ''}> ואחרי הפרסום — להכין טיוטת מייל לרשימת התפוצה בג'ימייל</label>` : ''}
       ${ch?.any ? '<button type="button" class="btn" data-op="discard">ביטול כל השינויים</button>' : ''}
@@ -2211,7 +2272,9 @@ ${proofCard()}
 
   async function publish(btn) {
     if (jobsBusy()) { U.notify('ממתינים לסיום העבודה — אחר כך אפשר לפרסם.', 'info'); return; }
+    if (A.uploads > 0) { U.notify('ממתינים לסיום ההעלאה — אחר כך אפשר לפרסם.', 'info'); return; }
     if (A.publishing) return;
+    if (tidyData(A.data)) touch();   // רווחים מיותרים לא מגיעים לאתר
     const hc = health();
     if (hc.must.length) { U.notify(hc.must[0].text, 'error'); setTab('publish'); return; }
     const errs = S.admin.validate(A.data);
@@ -2221,6 +2284,7 @@ ${proofCard()}
     const stop = U.notify('מפרסמים…', 'progress');
     const go = async (force) => {
       if (jobsBusy()) throw new Error('ממתינים לסיום העבודה.');
+      if (A.uploads > 0) throw new Error('ממתינים לסיום ההעלאה.');
       A.publishing = true;
       try {
         // שמירה אוטומטית שמחכה או שכבר בדרך לא תתחרה בפרסום
@@ -2291,6 +2355,7 @@ ${proofCard()}
     d.showModal();
   }
   async function discard() {
+    if (A.uploads > 0 || jobsBusy()) { U.notify('יש העלאה או עבודה שעוד רצה — חכו שתסתיים לפני ביטול השינויים.', 'info'); return; }
     const other = A.draftBy && A.draftBy !== S.sb.user?.email ? A.draftBy : '';
     const msg = CLOUD
       ? `לבטל את כל השינויים שלא פורסמו ולחזור למה שמפורסם באתר?\n\nגם הטיוטה המשותפת בשרת תימחק — לכל המנהלים${other ? `, כולל השינויים ש־${other} שמר בה` : ''}.`
@@ -2391,7 +2456,7 @@ ${proofCard()}
         case 'hosts': e.hosts = splitList(v); break;
         case 'panelists': e.panelists = splitList(v); break;
         case 'season': if (v === '__new') { newSeasonInline(t); return; } e.season = v; break;
-        case 'audio': e.audio = v; e.duration = 0; break;
+        case 'audio': { const was = U.streamUrl(e); e.audio = v; e.duration = 0; if (U.streamUrl(e) !== was) resetAudioSource(e); break; }
         case 'cover': e.cover = v; e.thumb = ''; break;   // קישור חדש — הגרסה הקטנה הישנה כבר לא מתאימה
         default: e[f] = v;
       }
@@ -2432,6 +2497,8 @@ ${proofCard()}
       touch(); renderList(); renderEditor(); U.notify(`${A.picked.size === 1 ? 'תוכנית אחת שויכה' : `${A.picked.size} תוכניות שויכו`}${v === '__none' ? ' ל"בלי עונה"' : ` לעונה "${A.data.seasons.find((s) => s.id === v)?.title || ''}"`}.`, 'success');
       return;
     }
+    // סיימו לערוך שדה טקסט של הטיוטה: הרווחים המיותרים יורדים, והערך הנקי נכנס לטיוטה כמו הקלדה
+    if ((t.dataset.f || t.dataset.lf || t.dataset.sf || t.dataset.uf || t.dataset.cf || t.dataset.zf) && tidyField(t)) t.dispatchEvent(new Event('input', { bubbles: true }));
     const e = cur(); if (!e) return;
     if (t.dataset.upload) {
       const file = t.files[0]; if (!file) return;
@@ -2439,7 +2506,7 @@ ${proofCard()}
       if (!await uploadFile(e, t.dataset.upload, file)) { t.disabled = false; t.value = ''; }
       return;
     }
-    if (t.dataset.f === 'audio' || t.dataset.f === 'cover' || t.dataset.f === 'publishAt') renderEditor();
+    if (t.dataset.f === 'audio' || t.dataset.f === 'cover' || t.dataset.f === 'publishAt') renderEditorKeep();
   });
 
   /** העלאת קובץ לתוכנית — מכפתור הבחירה או מגרירה */
@@ -2453,14 +2520,14 @@ ${proofCard()}
       else {
         const url = await window.RoshUpload(file, e.id, kind, progress);
         const live = liveEp(e.id); if (!live) throw new Error('התוכנית נמחקה בזמן ההעלאה.');
-        live[kind] = url; live.duration = 0;
+        live[kind] = url; live.duration = 0; resetAudioSource(live, file.size);
       }
       touch();
-      if (A.selected === e.id) renderEditor();
+      if (A.selected === e.id) renderEditorKeep();   // כותבים תיאור בזמן ההעלאה — המקלדת לא נופלת
       U.notify('הקובץ הועלה. כשתלחצו פרסום, הוא יופיע באתר.', 'success');
       return true;
     } catch (err) { uploadStatus(e, kind, err.message); U.notify(err.message, 'error'); return false; }
-    finally { A.uploads--; }
+    finally { A.uploads--; if (!A.uploads && A.tab === 'publish') renderPublish(); }   // כפתור הפרסום חוזר
   }
   /* גרירת קובץ לטופס התוכנית: הקלטה או תמונה — לפי סוג הקובץ. (כפתורי הבחירה נשארים.)
      קובץ שנגרר לדף אף פעם לא נפתח בדפדפן במקום הניהול (זה היה מוחק את מה שבזיכרון). */
@@ -2593,12 +2660,12 @@ ${proofCard()}
         catch (err) { st.error = err.status === 409 ? 'קודם צריך לתמלל את ההקלטה (הכפתור "תמלול ויצירת תיאור").' : err.message; }
         st.titlesBusy = false; paintAi();
       } break;
-      case 'ai-title-use': if (e) { const t = A.ai.get(e.id)?.titles?.[i]; if (t) { e.title = t; touch(); renderEditor(); renderList(); U.notify('השם הוחלף. אפשר לערוך אותו בשדה "שם התוכנית".', 'success'); } } break;
+      case 'ai-title-use': if (e) { const t = A.ai.get(e.id)?.titles?.[i]; if (t) { e.title = tidyText(t); touch(); renderEditor(); renderList(); U.notify('השם הוחלף. אפשר לערוך אותו בשדה "שם התוכנית".', 'success'); } } break;
       case 'ai-apply': if (e && A.ai.get(e.id)?.summary) { applySummary(e, A.ai.get(e.id).summary); touch(); renderEditor(); renderList(); U.notify('התיאור והסיכום נכנסו לתוכנית. בדקו, ואז "פרסום לאתר".', 'success'); } break;
       case 'ai-transcript': if (e) { const st = A.ai.get(e.id) || {}; A.ai.set(e.id, st); if (st.transcript != null) { st.transcript = null; paintAi(); break; } try { const r = await S.sb.call(`/api/program/ai/transcript/${encodeURIComponent(e.id)}`); st.transcript = r.text || ''; if (!st.summary && r.summary) st.summary = r.summary; } catch (err) { st.transcript = ''; st.error = err.status === 404 ? 'עדיין אין תמלול לתוכנית הזו.' : err.message; } paintAi(); } break;
       // האתר
       case 'banner-toggle': { const bn = A.data.settings.banner || (A.data.settings.banner = {}); bn.enabled = !bn.enabled; if (bn.enabled && !bn.text) { U.notify('כתבו קודם את ההודעה.', 'info'); bn.enabled = false; } touch(); renderSite(); break; }
-      case 'update-add': A.data.settings.updates.unshift({ id: `u-${Date.now().toString(36)}`, date: new Date().toISOString().slice(0, 10), title: '', text: '', link: '', pinned: false }); touch(); $('#update-rows').innerHTML = renderUpdates(A.data.settings.updates); $('#update-rows input[data-uf="title"]')?.focus(); break;
+      case 'update-add': A.data.settings.updates.unshift({ id: `u-${Date.now().toString(36)}`, date: S.todayIL(), title: '', text: '', link: '', pinned: false }); touch(); $('#update-rows').innerHTML = renderUpdates(A.data.settings.updates); $('#update-rows input[data-uf="title"]')?.focus(); break;
       case 'update-pin': { const u = A.data.settings.updates[i]; if (u) { u.pinned = !u.pinned; touch(); $('#update-rows').innerHTML = renderUpdates(A.data.settings.updates); } break; }
       case 'update-del': if (confirm('למחוק את העדכון?')) { A.data.settings.updates.splice(i, 1); touch(); renderSite(); } break;
       case 'season-add': { const y = new Date().getFullYear(); A.data.seasons.push({ id: uniqueSeasonId(String(y)), title: `עונת ${y}`, year: y, note: '' }); touch(); $('#season-rows').innerHTML = renderSeasonRows(); $$('#season-rows input[data-zf="title"]').pop()?.select(); break; }

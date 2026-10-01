@@ -33,11 +33,10 @@
     <h1>שלום, מאזין.</h1>
     <p class="desc">${S.sb.configured ? 'התחברו עם Google, והאזור האישי יישמר בחשבון שלכם: איפה עצרתם, התור, "לאחר כך", ההיסטוריה וההעדפות — זהה בטלפון ובמחשב. בלי התחברות שום דבר לא נשמר, ומה שעשיתם בביקור הזה יתווסף לחשבון ברגע שתתחברו.' : 'ההתחברות אינה מוגדרת באתר הזה, ולכן שום דבר אישי לא נשמר.'}</p>
     <div class="actions">${S.sb.configured ? '<div class="google-slot" data-google></div>' : ''}<a class="btn" href="archive.html">לארכיון</a></div>
-    ${S.sb.configured ? '<p class="cue-hint" style="margin-top:10px;font-size:12px;color:var(--muted);font-weight:700"><a href="#" data-login>בעיה עם הכפתור? כניסה בחלון נפרד</a></p>' : ''}
   </div>
 </div>`;
       if (S.sb.configured) S.sb.google(P.querySelector('[data-google]'), { onDone: (who) => { renderAll(); U.notify(`שלום, ${firstName(who) || 'מאזין'}. התחברתם.`, 'success'); }, onError: (err) => U.notify(`ההתחברות לא הצליחה: ${err.message}`, 'error') })
-        .catch((err) => { const g = P.querySelector('[data-google]'); if (g) g.innerHTML = `<button type="button" class="btn xl primary" data-login>התחברות עם Google <span>←</span></button><small class="cue-hint">${esc(err.message)}</small>`; });
+        .catch((err) => { const g = P.querySelector('[data-google]'); if (g) g.innerHTML = `<small class="cue-hint">${esc(err.message)}</small>`; });
       return;
     }
     const name = firstName(u);
@@ -170,13 +169,6 @@ ${heard.length > 30 ? `<p class="cue-hint">ועוד ${heard.length - 30} תוכ�
 
   /* ---------- אירועים ---------- */
   document.addEventListener('click', async (e) => {
-    if (e.target.closest('[data-login]')) {
-      e.preventDefault();
-      const b = e.target.closest('[data-login]'); b.disabled = true;
-      try { const u = await S.sb.signIn(); renderAll(); U.notify(`שלום, ${firstName(u) || 'מאזין'}. התחברתם.`, 'success'); }
-      catch (err) { U.notify(`ההתחברות נכשלה: ${err.message}`, 'error'); b.disabled = false; }
-      return;
-    }
     if (e.target.closest('[data-logout]')) { S.signOut(); U.notify('התנתקתם.', 'success'); return; }
     const play = e.target.closest('[data-play]');
     if (play) { const ep = S.byId(play.dataset.play); if (ep) Pl.isCurrent(ep.id) ? Pl.toggle() : Pl.load(ep); return; }

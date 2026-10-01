@@ -653,7 +653,7 @@
     if (!el || !S?.sb?.configured) return;
     const u = S.sb.user;
     if (!u) {
-      el.innerHTML = '<div class="subscribe-google"><span>מתחברים עם Google, וההצטרפות היא בלחיצה אחת — בלי להקליד כתובת.</span><div class="google-slot" data-google></div><a class="btn ghost small" href="#" data-subscribe-fallback>בעיה עם הכפתור? כניסה בחלון נפרד</a></div>';
+      el.innerHTML = '<div class="subscribe-google"><span>מתחברים עם Google, וההצטרפות היא בלחיצה אחת — בלי להקליד כתובת.</span><div class="google-slot" data-google></div></div>';
       // הכפתור של Google (סקריפט חיצוני כבד) נטען רק כשהכרטיס מתקרב למסך — לא בטעינת הדף
       const slot = el.querySelector('[data-google]');
       whenNear(slot, async () => {
@@ -680,10 +680,10 @@
   }
   document.addEventListener('click', async (e) => {
     const S = window.RoshStore;
-    const join = e.target.closest?.('[data-subscribe]'), leave = e.target.closest?.('[data-unsubscribe]'), fb = e.target.closest?.('[data-subscribe-fallback]');
-    if (!join && !leave && !fb) return;
+    const join = e.target.closest?.('[data-subscribe]'), leave = e.target.closest?.('[data-unsubscribe]');
+    if (!join && !leave) return;
     e.preventDefault();
-    const host = (join || leave || fb).closest('[data-subscribe-host]');
+    const host = (join || leave).closest('[data-subscribe-host]');
     try {
       if (join) { join.disabled = true; await S.sb.subscribe.join(); notify('נרשמתם לרשימת התפוצה.', 'success'); }
       else if (leave) {
@@ -693,7 +693,6 @@
         if (host) host.dataset.justLeft = '1';
         notify('הוסרתם מרשימת התפוצה. לא יישלחו אליכם יותר מיילים.', 'success');
       }
-      else await S.sb.signIn();
     } catch (err) { notify(err.message, 'error'); }
     mountSubscribe(host);
   });
@@ -723,7 +722,6 @@
 #login-welcome .welcome-note{font-size:13px;color:#7d7568;margin:10px 0}
 #login-welcome [data-welcome-google]{display:flex;justify-content:center;min-height:44px}
 #login-welcome .welcome-later{border:0;background:transparent;color:#746b5c;font:inherit;font-size:14px;padding:12px;cursor:pointer;text-decoration:underline;text-underline-offset:4px}
-#login-welcome .welcome-fallback{display:block;margin:8px auto;border:0;background:transparent;color:#8c6b22;font:inherit;font-size:12px;cursor:pointer}
 #login-welcome button:focus-visible{outline:3px solid #b98e2b;outline-offset:3px}
 @media(max-width:480px){#login-welcome{padding:36px 20px 20px}#login-welcome h2{font-size:25px}}
 </style>
@@ -736,7 +734,6 @@
 <div data-welcome-google></div>
 <p class="welcome-note">ההתחברות בחינם · ההרשמה לתפוצה היא לבחירתכם</p>
 <p data-login-error role="status" class="welcome-note"></p>
-<button type="button" class="welcome-fallback" data-fallback>בעיה עם כפתור Google? התחברות בחלון נפרד</button>
 <button type="button" class="welcome-later" data-dismiss>אמשיך בינתיים בלי להתחבר</button>`;
     document.body.appendChild(d);
     const oneTap = () => {
@@ -748,15 +745,11 @@
     d.addEventListener('cancel', (e) => { e.preventDefault(); close(); });
     d.addEventListener('click', async (e) => {
       if (e.target === d || e.target.closest('[data-dismiss]')) { close(); return; }
-      const b = e.target.closest('[data-fallback]');
-      if (!b) return;
-      b.disabled = true;
-      try { await S.sb.signIn(); close(false); }
-      catch (err) { if (d.isConnected) { d.querySelector('[data-login-error]').textContent = err.message; b.disabled = false; } }
+
     });
     d.showModal();
     try { await S.sb.google(d.querySelector('[data-welcome-google]'), { onDone: () => close(false), onError: (e) => { if (d.isConnected) d.querySelector('[data-login-error]').textContent = e.message; } }); }
-    catch (e) { if (d.isConnected) d.querySelector('[data-login-error]').textContent = 'אפשר להתחבר באמצעות הכפתור שמתחת.'; }
+    catch (e) { if (d.isConnected) d.querySelector('[data-login-error]').textContent = 'כפתור Google לא נטען. רעננו את הדף ונסו שוב.'; }
   }
 
   window.RoshUI = { offerLogin, newUpdates, markUpdatesSeen, banner, messageForm, mountSubscribe, esc, fmtTime, parseTime, fmtDuration, fmtDate, fmtHebDate, fmtWeekday, slugify, qs, header, footer, repaintHeader, actionButtons, paintActions, push, notify, kbdHelp, isTyping, copy, driveId, isDriveUrl, streamUrl, streamCandidates, downloadUrl, shareUrl, publicLinks, coverVars, hue, seasonVars, epCard, reveal, pauseOffscreen, countUp, eqBars, reduceMotion, applyPrefs };

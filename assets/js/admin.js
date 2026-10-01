@@ -371,7 +371,6 @@
       : 'הניהול פתוח למנהלי התוכנית בלבד. היכנסו עם חשבון Google.';
     $('#gate-login').hidden = true;
     $('#gate-google').hidden = !!u;
-    $('#gate-fallback').hidden = !!u || !CLOUD;
     if (!u && !allowed && CLOUD) mountGate();
     paintHeader();
     return allowed;
@@ -407,9 +406,7 @@
     try { await S.sb.google($('#gate-google'), { onDone: afterLogin, onError: (err) => U.notify(`ההתחברות לא הצליחה: ${err.message}`, 'error') }); }
     catch (err) { gateMounted = false; $('#gate-google').innerHTML = `<span class="cue-hint">${esc(err.message)}</span>`; $('#gate-login').hidden = false; }
   }
-  const viaSite = async (e) => { e?.preventDefault(); try { await S.sb.signIn(); await afterLogin(); } catch (err) { U.notify(`ההתחברות לא הצליחה: ${err.message}`, 'error'); } };
-  $('#gate-login').addEventListener('click', viaSite);
-  $('#gate-login-site').addEventListener('click', viaSite);
+  $('#gate-login').addEventListener('click', () => { gateMounted = false; mountGate(); });
 
   /* ---------- לשוניות ---------- */
 

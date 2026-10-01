@@ -177,6 +177,26 @@
 
   /* ---------- כותרת ופוטר ---------- */
 
+  /* ---------- הקישור לניהול ----------
+     ניהול אתר התוכניות הוא חלק מדף הניהול של אתר הסקר, ושם נבדק שאתם מנהלים. הקישור מוביל
+     ישר לשם, בלי לעבור ב־admin.html: בלחיצה נוצר קוד מעבר חד־פעמי (handoff), כך שנכנסים עם
+     אותו חשבון בלי כניסה נוספת. בלי שרת (קטלוג מקומי) — admin.html כמו קודם. */
+  function adminHref(part = 'programs') {
+    let origin = '';
+    try { origin = new URL(window.RoshStore?.sb?.cfg?.apiBase || '').origin; } catch { /* */ }
+    return origin && window.RoshStore?.state?.source === 'cloudflare' ? `${origin}/admin#prog-${part}` : 'admin.html';
+  }
+  document.addEventListener('click', async (e) => {
+    const a = e.target.closest?.('a[data-admin-go]');
+    if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    const sb = window.RoshStore?.sb;
+    if (!sb?.session?.token || !/^https?:/.test(a.getAttribute('href') || '')) return;   // בלי חשבון מחובר — הקישור הרגיל, ושם נכנסים עם Google
+    e.preventDefault();
+    let target = a.href;
+    try { target = `${await sb.handoff.toSurvey()}${new URL(a.href).hash}`; } catch { /* נכנסים שם עם Google */ }
+    location.href = target;
+  });
+
   /* ---------- עדכונים חדשים ----------
      עדכון "חדש" = מ־30 הימים האחרונים ועוד לא ראיתם אותו במכשיר הזה. מה שראיתם נשמר
      במכשיר (rosh:updates-seen, רק מזהים — לא נתון אישי). ראיתם = לחצתם "הבנתי" או נכנסתם לדף העדכונים. */
@@ -285,7 +305,7 @@
       ? `<a href="me.html" class="me-link signed" ${active === 'me' ? 'aria-current="page"' : ''}>${user.picture ? `<img class="avatar" src="${esc(user.picture)}" alt="" referrerpolicy="no-referrer">` : `<span class="avatar" aria-hidden="true">${esc(first.slice(0, 1) || '☺')}</span>`}<span>${esc(first || 'האזור האישי')}</span></a>`
       : `<a href="me.html" class="me-link" ${active === 'me' ? 'aria-current="page"' : ''}><span class="avatar" aria-hidden="true">☺</span><span>האזור האישי</span></a>`;
     // כפתור הניהול מוצג רק למי שמחובר בחשבון מנהל
-    const admin = user?.isAdmin ? `<a href="admin.html" class="admin-link" ${active === 'admin' ? 'aria-current="page"' : ''}>ניהול</a>` : '';
+    const admin = user?.isAdmin ? `<a href="${esc(adminHref())}" data-admin-go class="admin-link" ${active === 'admin' ? 'aria-current="page"' : ''}>ניהול</a>` : '';
     return `
 <header class="site-header" id="site-header-bar">
   <a class="brand" href="index.html">
@@ -813,5 +833,5 @@
     catch (e) { if (d.isConnected) d.querySelector('[data-login-error]').textContent = 'כפתור Google לא נטען. רעננו את הדף ונסו שוב.'; }
   }
 
-  window.RoshUI = { offerLogin, newUpdates, markUpdatesSeen, updateUrl, updateText, updatePlain, updateExtras, fmtSize, banner, messageForm, mountSubscribe, esc, fmtTime, parseTime, fmtDuration, fmtDate, fmtHebDate, fmtWeekday, slugify, qs, header, footer, repaintHeader, actionButtons, paintActions, push, notify, kbdHelp, isTyping, copy, driveId, isDriveUrl, streamUrl, streamCandidates, downloadUrl, shareUrl, publicLinks, coverVars, hue, seasonVars, epCard, reveal, pauseOffscreen, countUp, eqBars, reduceMotion, applyPrefs };
+  window.RoshUI = { offerLogin, adminHref, newUpdates, markUpdatesSeen, updateUrl, updateText, updatePlain, updateExtras, fmtSize, banner, messageForm, mountSubscribe, esc, fmtTime, parseTime, fmtDuration, fmtDate, fmtHebDate, fmtWeekday, slugify, qs, header, footer, repaintHeader, actionButtons, paintActions, push, notify, kbdHelp, isTyping, copy, driveId, isDriveUrl, streamUrl, streamCandidates, downloadUrl, shareUrl, publicLinks, coverVars, hue, seasonVars, epCard, reveal, pauseOffscreen, countUp, eqBars, reduceMotion, applyPrefs };
 })();

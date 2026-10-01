@@ -50,7 +50,7 @@
     <h1>שלום, ${esc(name || 'מאזין')}.</h1>
     <p class="desc">${esc(u.email || '')}${checking ? ' · מאמתים…' : ' · הכול כאן שמור בחשבון, בכל מכשיר'}</p>
     <div class="actions">
-      ${u.isAdmin ? '<a class="btn xl primary" href="admin.html" data-reload>מעבר לניהול <span>←</span></a>' : ''}
+      ${u.isAdmin ? '<a class="btn xl primary" href="${esc(U.adminHref())}" data-admin-go data-reload>מעבר לניהול <span>←</span></a>' : ''}
       <a class="btn" href="archive.html">לארכיון</a>
       <button type="button" class="btn ghost" data-logout>התנתקות</button>
     </div>

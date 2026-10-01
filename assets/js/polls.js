@@ -55,7 +55,6 @@
     const mine = st?.mine || [];
     const voted = mine.length > 0;
     const counts = st?.counts || null;
-    const total = st?.total ?? null;
     const canVote = open && (!voted || (p.allowChange && ui.changing));
     const chosen = canVote ? ui.selected : new Set(mine);
     const max = p.multi ? p.maxChoices : 1;
@@ -93,7 +92,6 @@
     } else if (!open) {
       foot = `<span class="poll-hint">ההצבעה תיפתח בעוד ${esc(left(p.from) || 'מעט')}.</span>`;
     }
-    const totalLine = total != null && (counts || voted) ? `<span class="poll-total">${total === 1 ? 'הצבעה אחת' : `${n2(total)} הצביעו`}</span>` : '';
 
     return `<article class="poll poll-${p.layout} shape-${p.optionShape} size-${p.optionSize}${opts.featured ? ' poll-featured' : ''}${counts ? ' show-res' : ''}${ui.justVoted ? ' just-voted' : ''}" data-poll="${esc(p.id)}" style="--poll-h:${Number(p.hue) || 0}" aria-labelledby="poll-q-${esc(p.id)}">
   ${p.image && p.imageShape === 'wide' ? `<div class="poll-banner">${img(p.image, '')}</div>` : ''}
@@ -106,7 +104,7 @@
     </div>
   </header>
   <div class="poll-options" role="${p.multi ? 'group' : 'radiogroup'}" aria-labelledby="poll-q-${esc(p.id)}">${opts2.map(optionHtml).join('')}</div>
-  <footer class="poll-foot">${foot}${totalLine}</footer>
+  <footer class="poll-foot">${foot}</footer>
   ${ui.login ? `<div class="poll-login"><p>כדי שכל מאזין יצביע פעם אחת, מתחברים עם Google — בלחיצה אחת. הבחירה שלכם נשמרת.</p><div class="google-slot" data-poll-google></div><a href="#" class="cue-hint" data-poll-site-login>בעיה עם הכפתור? כניסה בחלון נפרד</a></div>` : ''}
   ${ui.error ? `<p class="poll-error" role="alert">${esc(ui.error)}</p>` : ''}
 </article>`;

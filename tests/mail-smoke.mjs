@@ -14,7 +14,7 @@ const catalog = JSON.parse(readFileSync(new URL('../data/episodes.json', import.
 const EP = catalog.episodes.slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''))[3];
 const SUBS = ['one@example.com', 'Two@Example.com', 'two@example.com', 'three@example.com', 'not-an-email'];
 
-let admin = true, subsMode = 'ok', gmailMode = 'ok', userdata = null, published = null;
+let admin = true, subsMode = 'ok', gmailMode = 'ok', userdata = null, published = null, dropDraft = 0;   // dropDraft=n: יצירת הטיוטה ה־n מעכשיו נכשלת (ניתוק רשת)
 const listAdds = [];   // מה שנשלח להוספה לרשימת התפוצה
 const drafts = []; let tokenRequests = 0;
 const alive = new Set(), deleted = [], sent = [];   // ג'ימייל מדומה: טיוטות שעוד קיימות, מה שנמחק, ומה שנשלח
@@ -59,6 +59,7 @@ await ctx.route('https://gmail.googleapis.com/**', async (route) => {
   if (req.headers().authorization !== 'Bearer tok-1') return json({ error: { code: 401, message: 'Invalid Credentials' } }, 401);
   if (gmailMode === 'disabled') return json({ error: { code: 403, message: 'Gmail API has not been used in project 601586229891 before or it is disabled.', status: 'PERMISSION_DENIED' } }, 403);
   if (p.endsWith('/profile')) return json({ emailAddress: 'admin@example.com' });
+  if (p.endsWith('/drafts') && req.method() === 'POST' && dropDraft && --dropDraft === 0) return route.abort('failed');
   if (p.endsWith('/drafts') && req.method() === 'POST') { const raw = req.postDataJSON().message.raw; drafts.push(Buffer.from(raw, 'base64url').toString('utf8')); alive.add(`r-${drafts.length}`); return json({ id: `r-${drafts.length}`, message: { id: `18ab${drafts.length}`, threadId: 't' } }); }
   const dm = p.match(/\/drafts\/([^/]+)$/);
   if (dm && req.method() === 'GET') return alive.has(dm[1]) ? json({ id: dm[1], message: { id: 'm' } }) : json({ error: { code: 404, message: 'Requested entity was not found.' } }, 404);
@@ -260,6 +261,23 @@ await page.waitForSelector('.mc-result .problems', { timeout: 10000 });
 check((await page.locator('.mc-result .problems').innerText()).includes('Gmail API עוד לא הופעל'), 'Gmail API לא מופעל: הודעה שמסבירה מה לעשות');
 gmailMode = 'ok';
 
+// ג'ימייל נכשל באמצע כמה טיוטות: מה שכבר נוצר נרשם בהיסטוריה, ו"החלפת הטיוטה הקודמת" מוצעת (בלי כפילויות)
+{
+  await tab('content');
+  await page.selectOption('[data-m="ep"]', EP.id);
+  await tab('people');
+  await page.fill('[data-m="chunk"]', '1');
+  const n0 = drafts.length;
+  dropDraft = 2;
+  await page.click('[data-mop="create"]');
+  await page.waitForFunction(() => /מתוך/.test(document.querySelector('.mc-result .problems')?.textContent || ''), null, { timeout: 10000 });
+  check(drafts.length === n0 + 1 && (await page.locator('.mc-result .problems').innerText()).includes('נוצרו 1 מתוך 3 טיוטות'), 'כשל באמצע: ההודעה אומרת כמה טיוטות נוצרו');
+  check(await page.locator('[data-mop="replace"]').isVisible() && await page.evaluate((id) => window.RoshStore.prefs.get('mailHistory', [])[0]?.drafts?.[0]?.id === id, `r-${drafts.length}`), 'הטיוטה שנוצרה נשמרה בהיסטוריה, ואפשר להחליף אותה');
+  await page.fill('[data-m="chunk"]', '400');
+  await settle(3500);
+  check(userdata?.prefs?.mailHistory?.[0]?.partial === true && userdata.prefs.mailDraft.chunk === 400, 'הטיוטות שנוצרו לפני הכשל נשמרות בהיסטוריה בחשבון');
+}
+
 /* ---------- השרת עוד לא מחזיר את הרשימה: ייבוא מקובץ ---------- */
 subsMode = 'missing';
 await page.goto(`${BASE}/mail.html?ep=${encodeURIComponent(EP.slug)}`);
@@ -317,6 +335,28 @@ await page.waitForFunction(() => document.querySelector('[data-m-save]')?.hidden
   check((await page.locator('.notice-host .notice-text').last().innerText()).includes('2 כתובות נוספו לרשימת התפוצה'), 'הודעה כמה נוספו');
   check(await page.locator('[data-m-save]').isHidden(), 'אחרי השמירה הרשימה נטענת מהשרת, ואין עוד מה לשמור');
 }
+// שמירה שנייה באותו ביקור: לרשימה נכנס בדיוק מה שרואים — כתובת שנמחקה משורה לא נשמרת, ותיקון של כתובת באותיות גדולות נשמר מתוקן
+{
+  await page.click('[data-mop="add-open"]');
+  await page.keyboard.type('x1@new.org, x2@new.org, x3@new.org');
+  await page.waitForSelector('[data-m-save]:not([hidden])');
+  await page.fill('[data-m="list"]', (await page.locator('[data-m="list"]').inputValue()).replace(', x3@new.org', ''));
+  await page.click('[data-mop="add-open"]');
+  await page.keyboard.type('Typo2@Gmial.com,שם');
+  await page.waitForSelector('[data-mfix="typo2@gmial.com"]');
+  await page.click('[data-mfix="typo2@gmial.com"]');
+  check((await page.locator('[data-m-save-text]').innerText()).includes('3 כתובות חדשות') && !(await page.locator('[data-mop="save-list"]').isDisabled()), 'שמירה שנייה באותו ביקור: הכפתור פעיל');
+  await page.click('[data-mop="save-list"]');
+  await page.waitForFunction(() => document.querySelector('[data-m-save]')?.hidden && /8 כתובות מרשימת התפוצה/.test(document.querySelector('[data-m-count]')?.textContent || ''), null, { timeout: 10000 });
+  const sent = listAdds.at(-1) || '';
+  check(listAdds.length === 2 && sent.includes('x1@new.org') && sent.includes('x2@new.org') && !sent.includes('x3@new.org'), `כתובת שנמחקה מהשורה לא נשמרת ברשימה (${JSON.stringify(sent)})`);
+  check(sent.includes('typo2@gmail.com,שם') && !/gmial/i.test(sent), 'תיקון טעות הקלדה באותיות גדולות: נשמרת הכתובת המתוקנת, עם השם');
+}
+// ייבוא: שורה בלי כתובת תקינה — אומרים; סימני כיוון סביב כתובת לא נכנסים אליה
+await page.setInputFiles('[data-m-file]', { name: 'more.csv', mimeType: 'text/csv', buffer: Buffer.from('שם,מייל\nמשה,moshe @gmail.com\nלאה,‪leah@list.org‬\n') });
+await page.waitForFunction(() => /בלי כתובת תקינה/.test(document.querySelector('.notice-host .notice-text:last-child')?.textContent || document.querySelector('.notice-host')?.textContent || ''), null, { timeout: 5000 }).catch(() => {});
+check((await page.locator('.notice-host .notice-text').last().innerText()).includes('שורה אחת בלי כתובת תקינה'), 'ייבוא: שורה שלא יצאה ממנה כתובת — ההודעה אומרת');
+check((await page.locator('[data-m="list"]').inputValue()).split('\n').includes('leah@list.org'), 'ייבוא: בלי סימני כיוון בכתובת');
 
 /* ---------- הכלי המשוכלל: עבודה שנשמרת, עיצוב טקסט, משתנים, בלוקים, בדיקה, היסטוריה, תבניות, סוגי מייל ---------- */
 await page.goto(`${BASE}/mail.html?ep=${encodeURIComponent(EP.slug)}`);

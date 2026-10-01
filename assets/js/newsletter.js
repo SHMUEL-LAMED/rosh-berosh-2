@@ -498,11 +498,14 @@ ${bodyHtml}
   /* ---------- כתובות ---------- */
 
   const EMAILS = /[^\s@<>,;:"'()[\]]+@[^\s@<>,;:"'()[\]]+\.[^\s@<>,;:"'()[\]]+/g;
+  // סימני כיוון ותווים בלתי נראים (מוואטסאפ, מוורד, מטקסט בעברית) — אחרת הם נדבקים לכתובת ושוברים את כותרת ה־Bcc
+  const MARKS = /[​‎‏‪-‮⁦-⁩﻿]/g;
+  const unmark = (s) => String(s ?? '').replace(MARKS, '');
   /** כל כתובות המייל שבטקסט — רשימה מודבקת, קובץ CSV מאקסל ("שם",כתובת), או "שם <כתובת>".
       באותיות קטנות, בלי כפילויות, בסדר שבו הופיעו. */
   function parseEmails(text) {
     const out = new Set();
-    for (const m of String(text || '').matchAll(EMAILS)) out.add(m[0].replace(/\.+$/, '').toLowerCase());
+    for (const m of unmark(text || '').matchAll(EMAILS)) out.add(m[0].replace(/\.+$/, '').toLowerCase());
     return [...out];
   }
   const KNOWN = new Set(['gmail.com', 'googlemail.com', 'yahoo.com', 'yahoo.co.il', 'ymail.com', 'hotmail.com', 'hotmail.co.il', 'outlook.com', 'outlook.co.il', 'live.com', 'msn.com', 'icloud.com', 'me.com', 'mac.com', 'aol.com', 'mail.com', 'email.com', 'gmx.com', 'walla.co.il', 'walla.com', 'netvision.net.il', '012.net.il', 'bezeqint.net', 'zahav.net.il', 'smile.net.il', 'barak.net.il', 'inter.net.il', 'nana10.co.il', 'protonmail.com', 'proton.me']);
@@ -613,7 +616,7 @@ ${bodyHtml}
   window.RoshMail = {
     STYLES, KINDS, BLOCKS, DEFAULT_BLOCKS, FONT_SETS, SHAPES, TOKENS, FONTS_URL,
     defaults, build, audit, blocksFor, suggestSubjects, rich, plain, tokens,
-    raw, mime, chunk, parseEmails, checkAddresses, fixAddress, dailyLimit, encodeWord, base64url,
+    raw, mime, chunk, parseEmails, unmark, checkAddresses, fixAddress, dailyLimit, encodeWord, base64url,
     inkFor, contrast, hslHex, palette, own,
   };
 })();

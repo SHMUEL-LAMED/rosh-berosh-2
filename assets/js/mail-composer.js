@@ -26,6 +26,9 @@
   const arr = (v) => (Array.isArray(v) ? v : []);
   const cut = (s, n = 8000) => String(s ?? '').slice(0, n);
   const clamp = (n, lo, hi, fb) => { const v = Math.floor(Number(n)); return Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : fb; };
+  // כמה בעותק המוסתר בכל טיוטה: עד מה שבחרו — וביחד עם מי שב"אל" לא יותר מהמגבלה היומית, ולא יותר
+  // מ־500 נמענים בהודעה אחת (המגבלה של ג'ימייל; גם ב־Workspace — לנמענים מחוץ לארגון)
+  const perDraft = (size, L, to = 1) => Math.max(1, Math.min(size, L - to, 500 - to));
   function when(ts) {
     const d = new Date(Number(ts)); if (!ts || Number.isNaN(d.getTime())) return '';
     const time = d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
@@ -160,7 +163,10 @@
 
   /* ---------- מה שנשמר בחשבון ---------- */
 
-  const toTemplate = (text, e) => { const t = label(e); return e && t.length > 1 ? String(text ?? '').split(t).join(TITLE) : String(text ?? ''); };
+  const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // רק השם כשהוא עומד לבד (מוקף בגרשיים, בנקודתיים, במקף, באימוג'י או בקצה השורה) — לא מילים בתוך משפט
+  // ("שנה טובה ומתוקה"), ולא חלק משם אחר ("פרק 2" בתוך "פרק 25")
+  const toTemplate = (text, e) => { const t = label(e); return e && t.length > 1 ? String(text ?? '').replace(new RegExp(`(?<![\\p{L}\\p{N}][ \\u00a0]?)${escRe(t)}(?![ \\u00a0]?[\\p{L}\\p{N}])`, 'gu'), TITLE) : String(text ?? ''); };
   const fill = (text, e) => (e ? String(text ?? '').split(TITLE).join(label(e)) : String(text ?? ''));
   // העיצוב והניסוח שעוברים ממייל למייל
   const KEEP = ['style', 'accent', 'cover', 'font', 'shape', 'listenLabel', 'downloadLabel', 'signature', 'descTitle', 'tracksTitle', 'moreTitle', 'shareTitle', 'shareText', 'ctaLabel', 'ctaUrl'];
@@ -618,13 +624,13 @@
 
     function paintRecipients(fillBox) {
       const r = st.rcp, count = $('[data-m-count]'), taEl = $('[data-m="list"]');
-      const list = effective(), n = list.length, ex = r.list.length - n, drafts = Math.max(1, Math.ceil(n / st.chunk));
+      const list = effective(), n = list.length, ex = r.list.length - n, drafts = Math.max(1, Math.ceil(n / perDraft(st.chunk, limit())));
       st.quality = M.checkAddresses(st.mode === 'me' ? [] : list);
       if (count) {
         if (st.mode === 'me') count.textContent = 'טיוטת בדיקה אליכם בלבד — בלי הרשימה. ככה רואים איך המייל נראה באמת לפני שיוצרים את הטיוטה לכולם.';
         else if (r.state === 'loading') count.innerHTML = '<span class="notice-spinner" aria-hidden="true"></span> טוענים את רשימת התפוצה…';
         else if (!r.list.length) count.innerHTML = `<span class="problems">${esc(r.state === 'missing' ? 'השרת עוד לא מחזיר את רשימת התפוצה (צריך לעדכן אותו). בינתיים: הורידו את הרשימה מניהול הסקר ("רשימת תפוצה" ← הורדה) וייבאו את הקובץ כאן, או הדביקו כתובות.' : r.state === 'error' ? `הרשימה לא נטענה: ${r.error}` : 'אין כתובות ברשימה. הדביקו כתובות או ייבאו קובץ.')}</span>`;
-        else count.textContent = `${fmtN(n)} כתובות${r.source === 'manual' ? ' (רשימה שערכתם כאן)' : ' מרשימת התפוצה'} ייכנסו בעותק מוסתר (Bcc) בלבד${ex ? ` — ${fmtN(ex)} הוצאו ("לא לשלוח אל")` : ''}${drafts > 1 ? ` — ${drafts} טיוטות, עד ${fmtN(st.chunk)} נמענים בכל אחת` : ''}.`;
+        else count.textContent = `${fmtN(n)} כתובות${r.source === 'manual' ? ' (רשימה שערכתם כאן)' : ' מרשימת התפוצה'} ייכנסו בעותק מוסתר (Bcc) בלבד${ex ? ` — ${fmtN(ex)} הוצאו ("לא לשלוח אל")` : ''}${drafts > 1 ? ` — ${drafts} טיוטות, עד ${fmtN(perDraft(st.chunk, limit()))} נמענים בכל אחת` : ''}.`;
       }
       if (taEl && fillBox) taEl.value = r.list.join('\n');
       const box = $('[data-m-listbox]'); if (box && st.mode === 'all' && !r.list.length && r.state !== 'loading') box.open = true;
@@ -649,12 +655,16 @@
     }
     /** זוכרים מאיזו שורה הגיעה כל כתובת — כדי שהשם שלידה יישמר ברשימה */
     function rememberLines(text) {
-      for (const line of String(text || '').split(/\r?\n/)) for (const e of M.parseEmails(line)) if (!st.lines.has(e) || line.trim().length > st.lines.get(e).length) st.lines.set(e, line.trim());
+      for (const raw of String(text || '').split(/\r?\n/)) { const line = M.unmark(raw).trim(); for (const e of M.parseEmails(line)) if (!st.lines.has(e) || line.length > st.lines.get(e).length) st.lines.set(e, line); }
     }
+    /** השורה (עם השם) שנשלחת לרשימה — רק אם יש בה בדיוק את הכתובת הזו. בשורה עם כמה כתובות, או
+        שהכתובת שבה נמחקה או תוקנה, נשלחת הכתובת לבד: לרשימה נכנס בדיוק מה שרואים כאן. */
+    const lineFor = (e) => { const l = st.lines.get(e), got = l ? M.parseEmails(l) : []; return got.length === 1 && got[0] === e ? l : e; };
     function setList(list) { st.rcp = { ...st.rcp, state: 'ready', list: [...new Set(list)], error: '', source: 'manual' }; st.error = ''; paintRecipients(true); paintResult(); paintChecks(); }
     function fixAddresses(emails) {
       const fixes = new Map(st.quality.typos.filter((t) => emails.includes(t.email)).map((t) => [t.email, t.fix]));
-      for (const [from, to] of fixes) if (st.lines.has(from)) st.lines.set(to, st.lines.get(from).split(from).join(to));
+      // בשורה המקורית הכתובת יכולה להיות באותיות גדולות (David@Gmial.com) — מחליפים בלי תלות באותיות
+      for (const [from, to] of fixes) if (st.lines.has(from)) st.lines.set(to, st.lines.get(from).replace(new RegExp(escRe(from), 'gi'), to));
       setList(st.rcp.list.map((a) => fixes.get(a) || a));
       U.notify(fixes.size === 1 ? 'הכתובת תוקנה בטיוטה הזו.' : `${fmtN(fixes.size)} כתובות תוקנו בטיוטה הזו.`, 'success');
     }
@@ -663,11 +673,12 @@
       const fresh = st.rcp.list.filter((e) => !st.server.has(e)); if (!fresh.length) return;
       btn.disabled = true;
       try {
-        const r = await S.sb.subscribe.add(fresh.map((e) => st.lines.get(e) || e).join('\n'));
+        const r = await S.sb.subscribe.add(fresh.map(lineFor).join('\n'));
         const added = Number(r.added) || 0, gone = Number(r.optedOut) || 0;
         U.notify(`${added ? (added === 1 ? 'כתובת אחת נוספה' : `${fmtN(added)} כתובות נוספו`) + ' לרשימת התפוצה' : 'לא נוספו כתובות חדשות'}${gone ? ` · ${fmtN(gone)} הסירו את עצמם בעבר ולא נוספו` : ''}.`, added ? 'success' : 'info', { ttl: 8000 });
         await loadRecipients();
-      } catch (err) { U.notify(`השמירה ברשימה לא הצליחה: ${err.message}`, 'error'); btn.disabled = false; }
+      } catch (err) { U.notify(`השמירה ברשימה לא הצליחה: ${err.message}`, 'error'); }
+      finally { btn.disabled = false; }   // הכפתור נשאר — כתובות שיתווספו אחר כך באותו ביקור נשמרות גם הן
     }
     async function loadRecipients() {
       st.rcp = { state: 'loading', list: [], error: '', source: '' }; paintRecipients(true);
@@ -783,33 +794,49 @@
       const extra = typed.slice(1);
       const tokenP = getToken();   // מיד, בתוך הלחיצה
       st.busy = true; st.error = ''; st.errorForce = false; st.progress = 'מחכים לאישור של Google…'; paintResult();
+      // מה שכבר נוצר בג'ימייל — נרשם בהיסטוריה גם אם ג'ימייל נכשל באמצע (אחרת הטיוטות שנוצרו "נעלמות" מכאן)
+      const drafts = []; let email = '', to = [], planned = 0, recorded = false;
+      const record = (extraFields = {}) => {
+        const entry = { at: Date.now(), key, kind, title, subject: b.subject, email, to: to[0] || '', mode, total: drafts.reduce((n, d) => n + d.count, 0), drafts, state: 'open', ...extraFields };
+        st.history.unshift(entry); saveHistory(); recorded = true;
+        return entry;
+      };
       try {
         await tokenP;
         st.progress = 'יוצרים את הטיוטה…'; paintResult();
-        const email = await account();
-        const L = M.dailyLimit(email), drafts = [];
-        const to = mode === 'me' ? [email] : [typed[0] || email].filter(Boolean);
-        // טיוטה אחת לא יכולה להיות גדולה מהמגבלה היומית — אחרת ג'ימייל לא ישלח אותה
-        const groups = mode === 'me' ? [[]] : M.chunk(list.filter((a) => !to.includes(a)), Math.min(size, L));
+        email = await account();
+        const L = M.dailyLimit(email);
+        to = mode === 'me' ? [email] : [typed[0] || email].filter(Boolean);
+        // כתובות נוספות שהוקלדו נכנסות לרשימה לפני החלוקה — כך גם הן נספרות. כל טיוטה (עם מי שב"אל") עד
+        // המגבלה היומית ועד 500 נמענים — אחרת ג'ימייל לא ישלח אותה
+        const bccAll = mode === 'me' ? [] : [...new Set([...list.filter((a) => !to.includes(a)), ...extra])];
+        const groups = mode === 'me' ? [[]] : M.chunk(bccAll, perDraft(size, L, to.length));
         if (!groups.length) groups.push([]);   // הרשימה היא רק הכתובת שב"אל"
-        if (mode !== 'me' && extra.length) groups[0] = [...new Set([...groups[0], ...extra])];
+        planned = groups.length;
         let day = 1, used = 0;
         for (let i = 0; i < groups.length; i++) {
           if (groups.length > 1) { st.progress = `יוצרים טיוטה ${i + 1} מתוך ${groups.length}…`; paintResult(); }
           const raw = M.raw({ to, bcc: groups[i], replyTo, subject: b.subject, html: b.html, text: b.text, unsubscribe });
           const d = await gmail('/drafts', { method: 'POST', body: { message: { raw } } });
-          if (used && used + groups[i].length > L) { day++; used = 0; }
-          used += groups[i].length;
+          const n = groups[i].length + to.length;   // גם מי שב"אל" נספר במגבלה היומית
+          if (used && used + n > L) { day++; used = 0; }
+          used += n;
           drafts.push({ id: d.id, messageId: d.message?.id || '', count: groups[i].length, day });
         }
         syncHistory();
         const prev = replace ? st.history.find((h) => h.key === key && h.email === email && h.mode !== 'me' && !DONE.has(h.state)) : null;
-        const entry = { at: Date.now(), key, kind, title, subject: b.subject, email, to: to[0] || '', mode, total: drafts.reduce((n, d) => n + d.count, 0), drafts, state: 'open' };
-        st.lastResult = entry; st.history.unshift(entry); saveHistory();
+        st.lastResult = record();
         if (prev) { st.progress = 'מוחקים את הטיוטה הקודמת…'; paintResult(); await removeDrafts(prev, 'replaced'); }
         U.notify(`${drafts.length === 1 ? 'הטיוטה נוצרה' : `${drafts.length} טיוטות נוצרו`} בג'ימייל של ${email}${prev ? ' — והקודמת נמחקה' : ''}.`, 'success');
         if (email && S.sb.user?.email && email.toLowerCase() !== S.sb.user.email.toLowerCase()) U.notify(`שימו לב: הטיוטה נוצרה בחשבון ${email}, לא ב־${S.sb.user.email}.`, 'info');
-      } catch (err) { st.error = err.message; }
+      } catch (err) {
+        st.error = err.message;
+        if (drafts.length && !recorded) {
+          // נכשל באמצע: מה שנוצר נשמר בהיסטוריה (פתיחה ומחיקה משם), ו"החלפת הטיוטה הקודמת" יוצרת הכל מחדש ומוחקת אותן — בלי כפילויות
+          syncHistory(); record({ partial: true });
+          st.error = `${err.message} נוצרו ${fmtN(drafts.length)} מתוך ${fmtN(planned)} טיוטות — הן בלשונית "היסטוריה". כדי לא לשלוח פעמיים, לחצו "החלפת הטיוטה הקודמת": כל הטיוטות ייווצרו מחדש, ואלה יימחקו.`;
+        }
+      }
       finally { st.busy = false; st.progress = ''; paintResult(); paintWarn(); paintHistory(); paintRecipients(false); }
     }
     /** מייל אמיתי — רק לתיבה של החשבון המחובר, כדי לראות אותו בדיוק כמו שהמאזינים יראו */
@@ -1023,11 +1050,14 @@
         catch (err) { U.notify(err.message, 'error'); return; }
         rememberLines(content);
         const found = M.parseEmails(content);
-        if (!found.length) { U.notify('לא נמצאו כתובות מייל בקובץ.', 'error'); return; }
+        // שורות עם "@" שלא יצאה מהן כתובת (david@gmail,com, moshe @gmail.com) — אומרים כמה, כדי שאפשר יהיה לתקן בקובץ
+        const bad = content.split(/\r?\n/).filter((l) => l.includes('@') && !M.parseEmails(l).length);
+        const badText = bad.length ? ` ${bad.length === 1 ? 'שורה אחת' : `${fmtN(bad.length)} שורות`} בלי כתובת תקינה לא נכנסו (למשל: ${M.unmark(bad[0]).trim().slice(0, 60)}).` : '';
+        if (!found.length) { U.notify(`לא נמצאו כתובות מייל בקובץ.${badText}`, 'error', bad.length ? { ttl: 12000 } : undefined); return; }
         const before = st.rcp.list.length;
         setList([...st.rcp.list, ...found]);
         const added = st.rcp.list.length - before;
-        U.notify(added ? `נוספו ${fmtN(added)} כתובות מהקובץ.` : 'כל הכתובות שבקובץ כבר ברשימה.', 'success');
+        U.notify(`${added ? `נוספו ${fmtN(added)} כתובות מהקובץ.` : 'כל הכתובות שבקובץ כבר ברשימה.'}${badText}`, bad.length ? 'info' : 'success', bad.length ? { ttl: 12000 } : undefined);
       }
     });
     root.addEventListener('keydown', (ev) => {

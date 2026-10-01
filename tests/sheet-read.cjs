@@ -30,6 +30,11 @@ vm.runInNewContext(fs.readFileSync('assets/js/sheet-read.js', 'utf8'), { window:
   const file = (name, bytes, type = '') => ({ name, type, arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), text: async () => Buffer.from(bytes).toString('utf8') });
   assert.equal(await w.RoshSheet.text(file('רשימה.xlsx', book)), await w.RoshSheet.xlsxText(book), 'an .xlsx file is opened');
   assert.equal(await w.RoshSheet.text(file('list.csv', new Uint8Array(Buffer.from('a@b.co,דוד')))), 'a@b.co,דוד', 'CSV is read as text');
+  // CSV מאקסל בעברית (Windows-1255), ו"טקסט Unicode" (UTF-16 עם BOM) — השמות לא משתבשים
+  const cp1255 = (s) => new Uint8Array([...s].map((c) => { const k = c.charCodeAt(0); return k >= 0x5d0 && k <= 0x5ea ? k - 0x5d0 + 0xe0 : k; }));
+  assert.equal(await w.RoshSheet.text(file('list.csv', cp1255('שם,מייל\r\nדוד כהן,david@gmail.com'))), 'שם,מייל\r\nדוד כהן,david@gmail.com', 'Windows-1255 CSV');
+  assert.equal(await w.RoshSheet.text(file('list.txt', new Uint8Array(Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from('דוד\tdavid@gmail.com', 'utf16le')])))), 'דוד\tdavid@gmail.com', 'UTF-16LE text');
+  assert.equal(await w.RoshSheet.text(file('list.csv', new Uint8Array(Buffer.from('﻿a@b.co,דוד')))), 'a@b.co,דוד', 'UTF-8 with BOM');
   await assert.rejects(w.RoshSheet.text(file('old.xls', new Uint8Array(4))), /xlsx|CSV/);
   await assert.rejects(w.RoshSheet.xlsxText(new Uint8Array(Buffer.from('not a zip'))), /אקסל/);
   console.log('Spreadsheet import: xlsx (deflate and stored, shared and inline strings, all sheets), CSV and errors passed.');

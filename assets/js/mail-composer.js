@@ -335,6 +335,15 @@
 <div class="mail-composer" data-kind="${st.kind}">
   <div class="mc-form">
     <div class="mc-kinds" role="radiogroup" aria-label="סוג המייל">${Object.entries(M.KINDS).map(([k, x]) => `<button type="button" role="radio" class="mc-kind" data-mkind="${k}" aria-checked="${st.kind === k}" ${k !== 'note' && noEps ? 'disabled' : ''}><i aria-hidden="true">${KIND_ICON[k]}</i><b>${esc(x.name)}</b><small>${esc(x.hint)}</small></button>`).join('')}</div>
+    <nav class="mc-quickflow" aria-label="המסלול המהיר ליצירת טיוטה">
+      <p class="mc-quickflow-title">יוצרים טיוטה בשלושה שלבים</p>
+      <div class="mc-steps">
+        <button type="button" class="mc-step" data-mstep="content" data-mtab="content" aria-pressed="${st.tab === 'content'}"><i>1</i><span><b>תוכן</b><small>נושא ונוסח</small></span></button>
+        <button type="button" class="mc-step" data-mstep="people" data-mtab="people" aria-pressed="${st.tab === 'people'}"><i>2</i><span><b>נמענים</b><small>מי יקבל את הטיוטה</small></span></button>
+        <button type="button" class="mc-step" data-mstep="check" data-mtab="check" aria-pressed="${st.tab === 'check'}"><i>3</i><span><b>בדיקה</b><small>עוברים על המייל לפני יצירה</small></span></button>
+      </div>
+      <p class="mc-quickflow-note">אחרי הבדיקה יוצרים טיוטה בג׳ימייל; המייל לא נשלח מכאן.</p>
+    </nav>
     <div class="mc-tabs" role="tablist" aria-label="חלקי העורך">${TABS.map(([k, t]) => `<button type="button" role="tab" id="mc${uid}-tab-${k}" data-mtab="${k}" aria-selected="${st.tab === k}" aria-controls="mc${uid}-panel-${k}" tabindex="${st.tab === k ? 0 : -1}">${t}<span class="mc-badge" data-mbadge="${k}"></span></button>`).join('')}</div>
     ${TABS.map(([k]) => `<div class="mc-panel" role="tabpanel" id="mc${uid}-panel-${k}" aria-labelledby="mc${uid}-tab-${k}" data-panel="${k}" ${st.tab === k ? '' : 'hidden'}></div>`).join('')}
   </div>
@@ -933,8 +942,9 @@
     function showTab(k) {
       if (!TABS.some(([t]) => t === k)) return;
       st.tab = k;
-      $$('[data-mtab]').forEach((b) => { const on = b.dataset.mtab === k; b.setAttribute('aria-selected', String(on)); b.tabIndex = on ? 0 : -1; });
+      $$('[role="tab"][data-mtab]').forEach((b) => { const on = b.dataset.mtab === k; b.setAttribute('aria-selected', String(on)); b.tabIndex = on ? 0 : -1; });
       $$('[data-panel]').forEach((p) => { p.hidden = p.dataset.panel !== k; });
+      $$('[data-mstep]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mstep === k)));
       if (k === 'history') checkHistory(false);
       if (k === 'check') paintChecks();
     }

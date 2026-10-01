@@ -708,18 +708,37 @@
     try { if (sessionStorage.getItem('rosh:login-offered')) return; sessionStorage.setItem('rosh:login-offered', '1'); } catch { /* אחסון חסום */ }
     if (document.getElementById('login-welcome')) return;
     const d = document.createElement('dialog');
-    d.id = 'login-welcome'; d.className = 'sheet';
-    d.style.cssText = 'width:min(480px,calc(100vw - 32px));max-height:90dvh;overflow:auto';
+    d.id = 'login-welcome'; d.className = 'login-welcome';
     d.setAttribute('aria-labelledby', 'login-welcome-title');
     d.setAttribute('aria-describedby', 'login-welcome-desc');
-    d.innerHTML = `<div class="section-title"><div><p class="kicker">האזור האישי שלכם</p><h2 id="login-welcome-title">כדאי להתחבר לראש בראש</h2></div><button type="button" class="icon-btn" data-dismiss aria-label="סגירת הצעת ההתחברות">✕</button></div>
-<div class="card-body"><p id="login-welcome-desc">מתחברים עם חשבון Google ושומרים את כל ההאזנות במקום אחד.</p>
-<ul style="line-height:1.9;padding-inline-start:24px"><li>ממשיכים להאזין בדיוק מהמקום שעצרתם.</li><li>שומרים תוכניות שאהבתם ותוכניות להאזנה בהמשך.</li><li>ההיסטוריה וההעדפות זמינות גם במכשיר אחר.</li></ul>
-<p class="cue-hint">ההתחברות בחינם. אפשר גם להמשיך להאזין בלי להתחבר.</p>
-<div data-welcome-google style="display:flex;justify-content:center;margin:20px 0"></div>
-<p data-login-error role="status" class="cue-hint"></p>
-<button type="button" class="btn" data-fallback>התחברות עם Google בחלון נפרד</button></div>
-<div class="card-foot"><button type="button" class="btn ghost" data-dismiss>אולי אחר כך — להמשיך באתר</button></div>`;
+    d.innerHTML = `<style>
+#login-welcome{box-sizing:border-box;width:min(520px,calc(100vw - 32px));max-height:90dvh;margin:auto;padding:40px 30px 24px;border:1px solid #e7dbbd;border-radius:28px;background:#fffdf9;color:#29251e;text-align:center;box-shadow:0 28px 90px #0004;overflow:auto;font-family:Heebo,sans-serif}
+#login-welcome::backdrop{background:rgb(16 20 28 / .6);backdrop-filter:blur(4px)}
+#login-welcome .welcome-close{position:absolute;top:14px;left:14px;border:0;background:transparent;color:#675b44;font-size:22px;width:40px;height:40px;border-radius:50%;cursor:pointer}
+#login-welcome .welcome-mark{display:grid;place-items:center;width:76px;height:76px;margin:0 auto 18px;border-radius:24px;background:linear-gradient(135deg,#c49628,#f1dc9b);color:#3e2c09;font-size:36px;box-shadow:0 8px 24px #ba8c2526}
+#login-welcome h2{font-family:Heebo,sans-serif;font-size:28px;line-height:1.3;margin:8px 0 14px;color:#29251e}
+#login-welcome .welcome-intro{font-size:16px;line-height:1.8;color:#716a5e;margin:0 0 22px}
+#login-welcome .welcome-benefits{display:grid;gap:10px;text-align:right;margin:0 0 24px}
+#login-welcome .welcome-benefits p{margin:0;padding:12px 16px;background:#f5f0e5;border-radius:12px;font-size:15px;line-height:1.6}
+#login-welcome .welcome-benefits span{color:#997315;margin-left:8px}
+#login-welcome .welcome-note{font-size:13px;color:#7d7568;margin:10px 0}
+#login-welcome [data-welcome-google]{display:flex;justify-content:center;min-height:44px}
+#login-welcome .welcome-later{border:0;background:transparent;color:#746b5c;font:inherit;font-size:14px;padding:12px;cursor:pointer;text-decoration:underline;text-underline-offset:4px}
+#login-welcome .welcome-fallback{display:block;margin:8px auto;border:0;background:transparent;color:#8c6b22;font:inherit;font-size:12px;cursor:pointer}
+#login-welcome button:focus-visible{outline:3px solid #b98e2b;outline-offset:3px}
+@media(max-width:480px){#login-welcome{padding:36px 20px 20px}#login-welcome h2{font-size:25px}}
+</style>
+<button type="button" class="welcome-close" data-dismiss aria-label="סגירת הצעת ההתחברות">×</button>
+<div class="welcome-mark" aria-hidden="true">♫</div>
+<p style="color:#997315;font-size:12px;font-weight:800;letter-spacing:1px;margin:0">ראש בראש · האזור האישי</p>
+<h2 id="login-welcome-title">ההאזנות שלכם, תמיד איתכם</h2>
+<p id="login-welcome-desc" class="welcome-intro">מתחברים עם Google ונהנים מאזור אישי<br>שזוכר את התוכניות ואת המקום שבו עצרתם.</p>
+<div class="welcome-benefits"><p><span aria-hidden="true">↻</span>ממשיכים להאזין מהמקום שעצרתם</p><p><span aria-hidden="true">♡</span>שומרים תוכניות אהובות ולהאזנה בהמשך</p><p><span aria-hidden="true">✓</span>ההיסטוריה וההעדפות איתכם בכל מכשיר</p></div>
+<div data-welcome-google></div>
+<p class="welcome-note">ההתחברות בחינם · ההרשמה לתפוצה היא לבחירתכם</p>
+<p data-login-error role="status" class="welcome-note"></p>
+<button type="button" class="welcome-fallback" data-fallback>בעיה עם כפתור Google? התחברות בחלון נפרד</button>
+<button type="button" class="welcome-later" data-dismiss>אמשיך בינתיים בלי להתחבר</button>`;
     document.body.appendChild(d);
     const oneTap = () => {
       if (!S.sb.user) S.sb.google(null, { oneTap: true, onError: (e) => notify(e.message, 'error') }).catch(() => {});

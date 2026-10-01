@@ -89,13 +89,13 @@ await page.waitForSelector('#dlg-poll[open]');
 check((await page.locator('#dlg-poll .pe-templates [data-pe-template]').count()) === 4, 'חלון יצירה עם תבניות להתחלה מהירה');
 await page.click('[data-pe-template="song"]');
 check((await page.inputValue('[data-pe="question"]')) === 'איזה שיר הכי אהבתם בתוכנית?', 'תבנית ממלאת שאלה ותשובות');
-await page.fill('[data-pe="question"]', 'איזה שיר הכי אהבתם?');
-await page.fill('[data-po="label"][data-i="0"]', 'אנא בכח');
+await page.fill('[data-pe="question"]', 'איזה שיר הכי אהבתם? ');
+await page.fill('[data-po="label"][data-i="0"]', 'אנא  בכח ');
 await page.fill('[data-po="sub"][data-i="0"]', 'מוטי שטיינמץ');
 await page.fill('[data-po="label"][data-i="1"]', 'ימים');
 await page.fill('[data-po="label"][data-i="2"]', 'שיר המעלות');
 await page.waitForFunction(() => document.querySelectorAll('#pe-prev .poll-opt').length === 3);
-check((await page.locator('#pe-prev .poll-opt b').first().innerText()) === 'אנא בכח', 'התצוגה המקדימה מתעדכנת תוך כדי כתיבה');
+check((await page.locator('#pe-prev .poll-opt b').first().innerText()).replace(/\s+/g, ' ').trim() === 'אנא בכח', 'התצוגה המקדימה מתעדכנת תוך כדי כתיבה');
 // תמונה לתשובה הראשונה
 const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.click('.pe-opt-img[data-i="0"]')]);
 await chooser.setFiles({ name: 'artist.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64') });
@@ -136,6 +136,7 @@ await page.click('[data-tab="publish"]');
 await page.click('.pub-card [data-op="publish"]');
 await page.waitForFunction(() => document.querySelector('#status-text').textContent.includes('הכול מפורסם'), null, { timeout: 10000 }).catch(() => {});
 const pub = publishBody?.settings?.polls?.[0];
+check(pub?.question === 'איזה שיר הכי אהבתם?' && pub?.options?.[0]?.label === 'אנא בכח', 'רווחים מיותרים בשאלה ובתשובות לא מתפרסמים');
 check(pub && pub.layout === 'grid' && pub.optionShape === 'square' && pub.hue === 300 && pub.options.length === 3 && pub.options[0].image && pub.show.episodes[0] === ep.id && pub.show.home, 'הסקר מתפרסם עם הקטלוג, עם כל ההגדרות');
 
 /* ---------- באתר ---------- */

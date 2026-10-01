@@ -145,8 +145,9 @@ await page.selectOption('#ep-filter', 'all'); await page.dispatchEvent('#ep-filt
 // תוכנית חדשה
 await page.click('[data-op="new"]');
 await page.waitForSelector('[data-f="title"]');
-await page.fill('[data-f="title"]', 'תוכנית בדיקה חדשה');
+await page.fill('[data-f="title"]', ' תוכנית  בדיקה חדשה ');   // רווחים מיותרים (כך נכנס השם שהפיל את האתר)
 await page.fill('[data-f="description"]', 'תיאור קצר לבדיקה. משפט שני.');
+check((await page.inputValue('[data-f="title"]')) === 'תוכנית בדיקה חדשה' && await page.evaluate(() => window.RoshAdminBridge.data.episodes[0].title === 'תוכנית בדיקה חדשה'), 'רווחים מיותרים בשם יורדים כשמסיימים לערוך את השדה');
 await page.waitForTimeout(700);
 check((await page.locator('#status-text').innerText()).includes('לא פורסמו'), 'אחרי שינוי: יש שינויים שלא פורסמו');
 await page.waitForTimeout(2000);
@@ -219,6 +220,13 @@ await page.click('#ep-list .ep-item >> nth=2');
 await page.click('[data-op="bulk-hide"]');
 await page.waitForTimeout(300);
 check((await page.locator('#ep-list .ep-item.hidden-ep').count()) === 2 && (await noticeText()) === '2 תוכניות הוסתרו.', 'פעולה על כמה תוכניות יחד: הסתרה');
+{
+  const order = () => page.evaluate(() => window.RoshAdminBridge.data.episodes.map((x) => x.id).join());
+  const before = await order();
+  await page.click('[data-op="bulk-del"]');
+  await page.click('.notice-host [data-action]');
+  check((await order()) === before, 'מחיקה של כמה תוכניות ו"ביטול": הן חוזרות בדיוק לאותו סדר');
+}
 await page.click('[data-op="bulk"]');
 
 /* ---------- האתר ---------- */

@@ -140,6 +140,10 @@
     sc.addEventListener('pointerdown', (e) => { P.dragging = true; sc.setPointerCapture(e.pointerId); preview(ratioFromEvent(e)); });
     sc.addEventListener('pointermove', (e) => { const r = ratioFromEvent(e); showTip(r); if (P.dragging) preview(r); });
     sc.addEventListener('pointerup', (e) => { if (!P.dragging) return; P.dragging = false; seek(ratioFromEvent(e) * dur()); });
+    // המערכת ביטלה את הנגיעה (מחווה, שיחה נכנסת) בלי pointerup — אחרת הזמן והידית נשארים תקועים בנקודת הגרירה
+    const endDrag = () => { if (P.dragging) { P.dragging = false; paint(); } };
+    sc.addEventListener('pointercancel', endDrag);
+    sc.addEventListener('lostpointercapture', endDrag);
     sc.addEventListener('pointerleave', () => { P.els.tip.style.opacity = ''; });
     sc.addEventListener('keydown', (e) => {
       const map = { ArrowRight: 5, ArrowLeft: -5, ArrowUp: 30, ArrowDown: -30, PageUp: 300, PageDown: -300 };
@@ -188,18 +192,18 @@
     const candidates = window.RoshUI.streamCandidates(ep);
     if (!candidates.length) { window.RoshUI.notify('לתוכנית הזו אין עדיין הקלטה להאזנה.', 'info'); return false; }
     open();
-    const same = P.episode && P.episode.id === ep.id && P.candidates && audio.src === P.candidates[P.candidateIndex];
+    const same = P.episode && P.episode.id === ep.id && P.candidates && audio.src === P.candidates[P.candidateIndex] && !audio.error;
+    if (!same) { save(true); flushListen(); }   // עוד על שם התוכנית הקודמת
     P.episode = ep;
     if (!same) {
-      flushListen();
       P.candidates = candidates;
       P.candidateIndex = 0;
       P.retriedAt = null;
       audio.src = candidates[0];
       audio.load();
       P.listened = 0;
-      P.uncounted = true;
-      if (!restored) countPlay();
+      P.started = false;    // עוד לא נוגנה (מתי תקיעה = טעינה מחדש — watchStall)
+      P.uncounted = true;   // נספרת כשמתחילה לנגן באמת (playing)
     }
     P.els.title.textContent = ep.title;
     P.els.link.href = `episode.html?ep=${encodeURIComponent(ep.slug)}`;
@@ -239,7 +243,9 @@
     if (!P.episode) return;
     P.wantPlay = true;
     P.restored = false;
-    countPlay();
+    if (!P.dock?.classList.contains('open')) open();   // נוגנה שוב אחרי סגירה — הנגן חוזר
+    // ההקלטה נכשלה קודם: play() על נגן בשגיאה לא עושה כלום — טוענים מחדש מאותה נקודה
+    if (audio.error && P.candidates) { P.candidateIndex = 0; P.retriedAt = null; resume(P.candidates[0]); return; }
     audio.play().catch((err) => {
       if (err?.name === 'NotAllowedError') return; // דורש מחווה של המשתמש
       if (err?.name === 'AbortError' || err?.name === 'NotSupportedError') return; // מקור הוחלף / נכשל — מטופל ב־error
@@ -288,6 +294,7 @@
   function setRate(r, silent) {
     r = Number(r) || 1;
     r = RATES.reduce((best, x) => (Math.abs(x - r) < Math.abs(best - r) ? x : best), 1);
+    audio.defaultPlaybackRate = r;   // load() מחזיר את playbackRate לערך הזה
     audio.playbackRate = r;
     if (P.els.speed) P.els.speed.value = String(r);
     if (silent) return;
@@ -397,7 +404,7 @@
   let tick = null;   // { at, t, id }: השנייה הקודמת של ניגון רציף; מתאפס בעצירה ובקפיצה
   audio.addEventListener('seeking', () => { tick = null; });
   setInterval(() => {
-    if (audio.paused || !P.episode) { tick = null; return; }
+    if (audio.paused || !P.episode || audio.readyState < 3) { tick = null; return; }   // טעינה / תקיעה — לא האזנה
     const now = Date.now(), t = audio.currentTime, rate = audio.playbackRate || 1;
     let secs = 1;
     if (tick && tick.id === P.episode.id) {
@@ -476,7 +483,7 @@
     const t = Math.floor(audio.currentTime);
     const url = window.RoshUI.shareUrl(P.episode, t);
     const text = `${P.episode.title} (${fmtTime(t)})`;
-    if (navigator.share) { try { await navigator.share({ title: P.episode.title, text, url }); return; } catch { /* בוטל */ } }
+    if (navigator.share) { try { await navigator.share({ title: P.episode.title, text, url }); return; } catch (err) { if (err?.name === 'AbortError') return; /* בוטל */ } }
     (await window.RoshUI.copy(url)) ? window.RoshUI.notify('הקישור לרגע הזה הועתק.', 'success') : window.RoshUI.notify('ההעתקה נכשלה. העתיקו מהשורה: ' + url, 'error');
   }
 
@@ -487,11 +494,13 @@
   audio.addEventListener('durationchange', () => { renderSegments(); paint(); });
   const paintPlaying = () => document.body.classList.toggle('is-playing', !audio.paused && !audio.ended);
   audio.addEventListener('play', () => { paint(); paintPlaying(); emit('play'); });
-  audio.addEventListener('playing', paintPlaying);
+  audio.addEventListener('playing', () => { paintPlaying(); countPlay(); });   // נספרת רק כשבאמת מתחילה (לא כשהדפדפן חסם ניגון אוטומטי)
   /* הזרמה שנתקעה באמצע (החיבור נפל, השרת הפסיק לשלוח): אחרי כמה שניות בלי התקדמות
-     טוענים מחדש מאותה נקודה — במקום שהנגן יישאר תקוע. */
-  const STALL_MS = 8000;
-  let stallTimer = 0;
+     טוענים מחדש מאותה נקודה — במקום שהנגן יישאר תקוע. כל ניסיון נוסף מחכה יותר, ואחרי
+     כמה ניסיונות מפסיקים ומודיעים — לא טוענים מחדש בלי סוף בלי מילה. לפני שההקלטה התחילה
+     לנגן לא טוענים מחדש (זה רק מבטל תשובה איטית של השרת): מחכים יותר, ואז מודיעים. */
+  const STALL_MS = 8000, STALL_TRIES = 3, START_MS = 30000;
+  let stallTimer = 0, stallTries = 0;
   function resume(src) {
     const t = audio.currentTime;
     audio.src = src;
@@ -502,15 +511,36 @@
   function watchStall() {
     clearTimeout(stallTimer);
     stallTimer = setTimeout(() => {
+      stallTimer = 0;
       if (!P.wantPlay || audio.paused || audio.ended || !audio.src || audio.readyState >= 3) return;
+      if (!P.started || stallTries >= STALL_TRIES) { giveUp(); return; }
+      stallTries += 1;
       resume(audio.src);
-    }, STALL_MS);
+    }, P.started ? STALL_MS * 2 ** stallTries : START_MS);   // כל ניסיון נוסף מחכה יותר — שרת איטי יספיק לענות
   }
   audio.addEventListener('waiting', () => { document.body.classList.remove('is-playing'); watchStall(); });
   audio.addEventListener('stalled', watchStall);
-  audio.addEventListener('playing', () => clearTimeout(stallTimer));
-  audio.addEventListener('pause', () => clearTimeout(stallTimer));
+  audio.addEventListener('progress', () => { if (stallTimer) watchStall(); });   // נתונים עדיין מגיעים (חיבור איטי) — זו לא תקיעה
+  audio.addEventListener('playing', () => { clearTimeout(stallTimer); stallTimer = 0; stallTries = 0; P.started = true; });
+  audio.addEventListener('pause', () => { clearTimeout(stallTimer); stallTimer = 0; stallTries = 0; });
   audio.addEventListener('pause', () => { paint(); paintPlaying(); save(true); flushListen(); emit('pause'); });
+  /* ההקלטה לא נטענה (שגיאה סופית, או תקיעה שלא השתחררה): עוצרים — אחרת הנגן מראה "מנגן", טוען מחדש
+     בלי סוף ומציג הודעה בכל פעם — ומודיעים רק למי שביקש לנגן (תוכנית ששוחזרה בטעינת הדף ועוד לא
+     נגעו בה נשארת בשקט). ▶ או "ניסיון חוזר" טוענים מחדש מאותה נקודה. */
+  function giveUp() {
+    const asked = P.wantPlay;
+    pause();
+    if (!asked) return;
+    const dl = window.RoshUI.downloadUrl(P.episode);
+    window.RoshUI.notify('ההקלטה לא נטענה כרגע. אפשר לנסות שוב או להוריד אותה.', 'error', {
+      action: 'ניסיון חוזר', ttl: 15000,
+      onAction: () => { P.wantPlay = true; P.candidateIndex = 0; P.retriedAt = null; resume(P.candidates[0]); },
+    });
+    if (dl) P.els.download.href = dl;
+  }
+  // עדכון בכוח (app-update.js): לא טוענים את הדף מחדש בזמן שמחכים להקלטה (טעינה, קפיצה, תקיעה) —
+  // body.is-playing מחזיק רק בזמן ניגון ממש
+  (window.RoshBusy = window.RoshBusy || []).push(() => P.wantPlay && !audio.paused && audio.readyState < 3);
   /* סוף תוכנית: אם יש תור — ממשיכים לבאה בתור מיד. אחרת מציעים את "התוכנית
      הבאה" — אותו כיוון כמו הכפתור ▸▸ בנגן (החדשה יותר). */
   audio.addEventListener('ended', () => {
@@ -548,13 +578,7 @@
       if (wasPlaying) play();
       return;
     }
-    const src = audio.src;
-    const dl = window.RoshUI.downloadUrl(P.episode);
-    window.RoshUI.notify('ההקלטה לא נטענה כרגע. אפשר לנסות שוב או להוריד אותה.', 'error', {
-      action: 'ניסיון חוזר', ttl: 15000,
-      onAction: () => { P.candidateIndex = 0; audio.src = P.candidates?.[0] || src; audio.load(); play(); },
-    });
-    if (dl) P.els.download.href = dl;
+    giveUp();
   });
   // רק שינוי אמיתי של העוצמה נשמר — לא החלת העוצמה השמורה בבניית הנגן
   audio.addEventListener('volumechange', () => {
@@ -568,7 +592,7 @@
   /* ---------- קיצורי מקלדת ---------- */
 
   // רווח על אחד מאלה מפעיל אותו (כפתור, קישור, בורר…) — ולא גם את הנגן
-  const CONTROLS = 'button,a,select,input,textarea,[role="button"],[role="slider"],[contenteditable]';
+  const CONTROLS = 'button,a,select,input,textarea,summary,[role="button"],[role="slider"],[contenteditable]';
   document.addEventListener('keydown', (e) => {
     if (window.RoshUI.isTyping(e) || e.metaKey || e.ctrlKey || e.altKey) return;
     // לפי המקש הפיזי (e.code), כדי שהקיצורים יעבדו גם כשהמקלדת בעברית; "?" נשאר לפי e.key (ui.js)

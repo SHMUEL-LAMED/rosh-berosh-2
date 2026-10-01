@@ -62,6 +62,10 @@ await ctx.route('https://fonts.googleapis.com/**', (route) => route.fulfill({ st
 await ctx.route('https://media.example/**', (route) => route.fulfill({ status: 200, contentType: 'image/gif', body: Buffer.from('R0lGODlhAQABAAAAACw=', 'base64') }));
 await ctx.addInitScript(() => { try { sessionStorage.setItem('rosh:holiday', 'off'); } catch { /* */ } });
 const page = await ctx.newPage();
+// כמו מבקר שבוחר להמשיך בלי להתחבר, סוגרים את ההצעה לפני פעולות בדף.
+await page.addLocatorHandler(page.locator('#login-welcome[open]'), async () => {
+  await page.locator('#login-welcome .welcome-later[data-dismiss]').click();
+});
 page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
 page.on('dialog', (d) => d.accept());
 const signIn = (who) => page.evaluate((u) => { localStorage.setItem('rosh:cf:session', JSON.stringify({ token: u.token, user: u.user })); localStorage.setItem('rosh:admin:guided', '1'); }, { token: who, user: users[who] });

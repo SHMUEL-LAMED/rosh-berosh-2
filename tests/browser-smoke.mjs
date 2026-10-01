@@ -35,6 +35,10 @@ if (!process.env.STREAM) {
   });
 }
 const page = await ctx.newPage();
+// כמו מבקר שבוחר להמשיך בלי להתחבר, סוגרים את ההצעה לפני פעולות בדף.
+await page.addLocatorHandler(page.locator('#login-welcome[open]'), async () => {
+  await page.locator('#login-welcome .welcome-later[data-dismiss]').click();
+});
 const errors = [];
 page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(`console: ${m.text()}`); });
@@ -237,6 +241,10 @@ for (const mode of ['slow', 'down']) {
       .observe(document, { childList: true, subtree: true });
   });
   const p = await sctx.newPage();
+  // כמו מבקר שבוחר להמשיך בלי להתחבר, סוגרים את ההצעה לפני פעולות בדף.
+  await p.addLocatorHandler(p.locator('#login-welcome[open]'), async () => {
+    await p.locator('#login-welcome .welcome-later[data-dismiss]').click();
+  });
   await p.route('**/api/program/catalog*', (route) => {
     if (mode === 'down') route.fulfill({ status: 500, headers: { 'access-control-allow-origin': '*' }, body: '{}' });
     /* slow: לא עונים — שרת תקוע */
@@ -270,6 +278,10 @@ for (const mode of ['slow', 'down']) {
   const open = async (answers, url) => {
     const ctx2 = await browser.newContext({ locale: 'he-IL', viewport: { width: 1200, height: 900 }, ignoreHTTPSErrors: !!process.env.HTTPS_PROXY });
     const p = await ctx2.newPage();
+    // כמו מבקר שבוחר להמשיך בלי להתחבר, סוגרים את ההצעה לפני פעולות בדף.
+    await p.addLocatorHandler(p.locator('#login-welcome[open]'), async () => {
+      await p.locator('#login-welcome .welcome-later[data-dismiss]').click();
+    });
     const calls = [];
     await p.route('**/api/program/**', mock(answers, calls));
     await p.goto(`${BASE}/index.html`, { waitUntil: 'domcontentloaded' });

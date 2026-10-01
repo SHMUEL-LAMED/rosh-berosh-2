@@ -82,6 +82,14 @@ await ctx.addInitScript(() => {
 });
 
 const page = await ctx.newPage();
+
+// כמו מבקר שבוחר להמשיך בלי להתחבר, סוגרים את ההצעה לפני פעולות בדף.
+
+await page.addLocatorHandler(page.locator('#login-welcome[open]'), async () => {
+
+  await page.locator('#login-welcome .welcome-later[data-dismiss]').click();
+
+});
 const errors = [];
 page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
 page.on('console', (msg) => { if (msg.type() === 'error') errors.push(`console: ${msg.text()}`); });

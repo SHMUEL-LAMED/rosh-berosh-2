@@ -92,6 +92,10 @@ await ctx.route(`${API}/**`, async (route) => {
 await ctx.route('https://accounts.google.com/**', (route) => route.abort());
 await ctx.route('https://fonts.googleapis.com/**', (route) => route.fulfill({ status: 200, contentType: 'text/css', body: '' }));
 const page = await ctx.newPage();
+// כמו מבקר שבוחר להמשיך בלי להתחבר, סוגרים את ההצעה לפני פעולות בדף.
+await page.addLocatorHandler(page.locator('#login-welcome[open]'), async () => {
+  await page.locator('#login-welcome .welcome-later[data-dismiss]').click();
+});
 page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(`console: ${m.text()}`); });
 const dialogs = []; let dismissRe = null;
@@ -460,6 +464,10 @@ check(await page.evaluate(() => document.body.classList.contains('admin-locked')
 {
   const wav = readFileSync(new URL('../assets/audio/demo.wav', import.meta.url));   // 42 שניות
   const p2 = await ctx.newPage();
+  // כמו מבקר שבוחר להמשיך בלי להתחבר, סוגרים את ההצעה לפני פעולות בדף.
+  await p2.addLocatorHandler(p2.locator('#login-welcome[open]'), async () => {
+    await p2.locator('#login-welcome .welcome-later[data-dismiss]').click();
+  });
   p2.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
   await p2.route(`${API}/api/program/stream/**`, (route) => {
     const m = /bytes=(\d+)-(\d*)/.exec(route.request().headers().range || '');
@@ -493,6 +501,10 @@ check(await page.evaluate(() => document.body.classList.contains('admin-locked')
   const eps = base.episodes.map((e, i) => (i === n - 1 || i === n - 3 ? { ...e, guests: ['דוד לוי'] } : i === n - 2 ? { ...e, guests: ['דוד  לוי', 'שרה כהן'], hosts: ['מגיש בדיקה'], panelists: ['חבר פאנל בדיקה'] } : e));
   published = { ...base, episodes: eps };
   const p3 = await ctx.newPage();
+  // כמו מבקר שבוחר להמשיך בלי להתחבר, סוגרים את ההצעה לפני פעולות בדף.
+  await p3.addLocatorHandler(p3.locator('#login-welcome[open]'), async () => {
+    await p3.locator('#login-welcome .welcome-later[data-dismiss]').click();
+  });
   p3.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
   await p3.goto(`${BASE}/archive.html`);
   await p3.waitForSelector('#guest');

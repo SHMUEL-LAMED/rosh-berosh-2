@@ -65,6 +65,11 @@
         .map((t) => ({ at: Math.max(0, Number(t.at) || 0), title: String(t.title || ''), artist: String(t.artist || ''), note: String(t.note || '') }))
         .sort((a, b) => a.at - b.at),
     };
+    // הכרזה המקורית של משדר התוצאות, גם כאשר הקטלוג נטען מהשרת.
+    if (ep.number === 90 && ep.title.trim() === 'מצעד האלבומים 25 שנות מוזיקה') {
+      ep.cover = 'assets/img/album-chart-25-results.jpg';
+      ep.thumb = ep.cover;
+    }
     // הכתובת שהנגן מנגן בפועל (קובץ ישיר או הזרמה ישירה מהדרייב). שדה מחושב —
     // לא נכנס ל־JSON שמתפרסם, ולכן מוגדר כלא־ניתן־למנייה.
     Object.defineProperty(ep, 'stream', { get() { return window.RoshUI?.streamUrl(this) || ''; }, enumerable: false, configurable: true });

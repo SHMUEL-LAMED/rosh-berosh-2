@@ -129,7 +129,11 @@
     if (favLink && favHref) { favLink.href = favHref; favLink.type = 'image/svg+xml'; }
     favHref = '';
   }
-  function setTitle(t) { if (document.title !== t) { ourTitle = t; document.title = t; } }
+  /* הדפדפן מחזיר את document.title בלי רווחים בקצוות ובלי רווחים כפולים. משווים לצורה הזו, ושומרים
+     את מה שהדפדפן באמת החזיר — אחרת שם תוכנית עם רווח מיותר ("…מוזיקה ") לא מזוהה ככותרת שלנו,
+     ה־MutationObserver כותב אותה שוב ושוב בלי סוף, והדף כולו נתקע. */
+  const cleanTitle = (t) => String(t).replace(/[\t\n\f\r ]+/g, ' ').trim();
+  function setTitle(t) { t = cleanTitle(t); if (document.title !== t) { document.title = t; ourTitle = document.title; } }
   function paintTab() {
     const p = Pl(), ep = p?.episode, playing = !!ep && !p.paused;
     if (playing) { setTitle(`▶ ${ep.title} · ${S?.site?.name || 'ראש בראש'}`); favStart(ep); }

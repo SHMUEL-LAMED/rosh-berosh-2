@@ -111,13 +111,28 @@ const tab = (name, scope = '') => page.click(`${scope}[data-mtab="${name}"]`);
 const shot = (name, fullPage = true) => (process.env.SHOTS ? page.screenshot({ path: `${process.env.SHOTS}/${name}.png`, fullPage }) : null);
 
 /* ---------- השער ---------- */
-await page.goto(`${BASE}/mail.html`);
+await page.goto(`${BASE}/mail.html?standalone=1`);
 await page.waitForSelector('#mail-gate:not([hidden])');
 check((await page.locator('#mail-google button').count()) === 1, 'בלי חיבור: כפתור כניסה עם Google');
 
+/* ---------- העורך עבר לדף הניהול: קישור ישן מעביר לשם, על אותה תוכנית ---------- */
+{
+  await page.evaluate(() => localStorage.setItem('rosh:cf:session', JSON.stringify({ token: 'test', user: { email: 'admin@example.com', name: 'בדיקה', isAdmin: true } })));
+  let target = '';
+  await page.route(`${API}/api/program/handoff`, (route) => route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ code: 'c0de' }) }));
+  await page.route(`${API}/api/program/handoff/**`, (route) => { target = route.request().url(); return route.fulfill({ status: 200, contentType: 'text/html', body: 'ok' }); });
+  await page.goto(`${BASE}/mail.html?ep=${encodeURIComponent(EP.slug)}`);
+  await page.waitForURL((u) => u.href.startsWith(`${API}/api/program/handoff/`), { timeout: 15000 });
+  const u = new URL(target);
+  check(u.searchParams.get('mail') === EP.slug && new URL(page.url()).hash === '#prog-mail', 'קישור ישן ל־mail.html מעביר לחלק „מייל למאזינים” בדף הניהול, עם קוד מעבר ועל אותה תוכנית');
+  await page.unroute(`${API}/api/program/handoff/**`); await page.unroute(`${API}/api/program/handoff`);
+  await page.evaluate(() => localStorage.removeItem('rosh:cf:session')).catch(() => {});
+}
+await page.goto(`${BASE}/mail.html?standalone=1`);
+
 /* ---------- מנהל מחובר: העורך ---------- */
 await page.evaluate(() => localStorage.setItem('rosh:cf:session', JSON.stringify({ token: 'test', user: { email: 'admin@example.com', name: 'בדיקה', isAdmin: true } })));
-await page.goto(`${BASE}/mail.html?ep=${encodeURIComponent(EP.slug)}`);
+await page.goto(`${BASE}/mail.html?standalone=1&ep=${encodeURIComponent(EP.slug)}`);
 await page.waitForSelector('.mail-composer', { timeout: 15000 });
 check((await page.locator('[data-m="ep"]').inputValue()) === EP.id, 'התוכנית מהכתובת נבחרה');
 check((await page.locator('[data-m="subject"]').inputValue()).includes(EP.title), 'הנושא כולל את שם התוכנית');
@@ -280,7 +295,7 @@ gmailMode = 'ok';
 
 /* ---------- השרת עוד לא מחזיר את הרשימה: ייבוא מקובץ ---------- */
 subsMode = 'missing';
-await page.goto(`${BASE}/mail.html?ep=${encodeURIComponent(EP.slug)}`);
+await page.goto(`${BASE}/mail.html?standalone=1&ep=${encodeURIComponent(EP.slug)}`);
 await page.waitForSelector('.mail-composer');
 await page.waitForSelector('[data-m-count] .problems', { state: 'attached' });
 check((await page.locator('[data-mbadge="people"]').innerText()) === '!', 'בלי רשימה: סימן אזהרה על לשונית "נמענים"');
@@ -293,7 +308,7 @@ check(true, 'ייבוא CSV מאקסל: 2 כתובות, בלי כפילויות'
 subsMode = 'ok';
 
 /* ---------- הוספת כתובות לרשימת התפוצה: הדבקה, קובץ אקסל, ושמירה ברשימה ---------- */
-await page.goto(`${BASE}/mail.html?ep=${encodeURIComponent(EP.slug)}`);
+await page.goto(`${BASE}/mail.html?standalone=1&ep=${encodeURIComponent(EP.slug)}`);
 await page.waitForSelector('.mail-composer');
 await page.waitForFunction(() => /3 כתובות/.test(document.querySelector('[data-m-count]')?.textContent || ''));
 await tab('people');
@@ -359,7 +374,7 @@ check((await page.locator('.notice-host .notice-text').last().innerText()).inclu
 check((await page.locator('[data-m="list"]').inputValue()).split('\n').includes('leah@list.org'), 'ייבוא: בלי סימני כיוון בכתובת');
 
 /* ---------- הכלי המשוכלל: עבודה שנשמרת, עיצוב טקסט, משתנים, בלוקים, בדיקה, היסטוריה, תבניות, סוגי מייל ---------- */
-await page.goto(`${BASE}/mail.html?ep=${encodeURIComponent(EP.slug)}`);
+await page.goto(`${BASE}/mail.html?standalone=1&ep=${encodeURIComponent(EP.slug)}`);
 await page.waitForSelector('.mail-composer');
 await page.waitForFunction(() => /כתובות מרשימת התפוצה/.test(document.querySelector('[data-m-count]')?.textContent || ''));
 check((await page.locator('[data-m="description"]').inputValue()).includes('ראיון בלעדי') && await page.locator('[data-m-work]').isVisible(), 'העבודה על המייל נשמרה בחשבון: חוזרים לתוכנית — והתיאור שכתבתם שם');
@@ -587,7 +602,7 @@ await page.setViewportSize({ width: 1360, height: 900 });
 
 /* ---------- מנהל שאינו מנהל ---------- */
 admin = false;
-await page.goto(`${BASE}/mail.html`);
+await page.goto(`${BASE}/mail.html?standalone=1`);
 await page.waitForSelector('#mail-gate:not([hidden])');
 check((await page.locator('#mail-gate-text').innerText()).includes('אינו מוגדר כמנהל'), 'חשבון שאינו מנהל: הדף נעול');
 admin = true;

@@ -50,7 +50,7 @@
   const F = document.getElementById('featured');
   if (!feat) {
     // קישור לניהול מוצג רק למנהלים
-    F.innerHTML = `<div class="card"><div class="state"><span class="mark">♫</span><h3>עדיין אין תוכניות</h3><p>${S.sb.user?.isAdmin ? 'הוסיפו את התוכנית הראשונה מאזור הניהול.' : 'התוכניות יעלו לכאן בקרוב.'}</p>${S.sb.user?.isAdmin ? '<a class="btn primary" href="admin.html">לאזור הניהול <span>←</span></a>' : ''}</div></div>`;
+    F.innerHTML = `<div class="card"><div class="state"><span class="mark">♫</span><h3>עדיין אין תוכניות</h3><p>${S.sb.user?.isAdmin ? 'הוסיפו את התוכנית הראשונה מאזור הניהול.' : 'התוכניות יעלו לכאן בקרוב.'}</p>${S.sb.user?.isAdmin ? '<a class="btn primary" href="${esc(U.adminHref())}" data-admin-go>לאזור הניהול <span>←</span></a>' : ''}</div></div>`;
   } else {
     const season = S.seasons().find((s) => s.id === feat.season);
     F.innerHTML = `

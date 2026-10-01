@@ -66,6 +66,17 @@
   document.title = `${ep.title} — ${site.name || 'ראש בראש'}`;
   document.querySelector('meta[name="description"]').setAttribute('content', ep.description.slice(0, 160) || ep.title);
 
+  // canonical: הכתובת הקבועה של התוכנית הזו — הדף הסטטי (episodes/<slug>.html, כמו ב־build-episode-pages.mjs),
+  // ואם ה־slug לא מתאים לשם קובץ — episode.html?ep=<slug>. אף פעם לא דף הבית.
+  {
+    const siteBase = String(site.url || 'https://shmuel-lamed.github.io/rosh-berosh-2/').replace(/\/?$/, '/');
+    const fileSafe = ep.slug.length <= 150 && !/[/\\?#%\x00-\x1f\x7f]/.test(ep.slug) && !ep.slug.startsWith('.');
+    const href = siteBase + (fileSafe ? `episodes/${encodeURIComponent(ep.slug)}.html` : `episode.html?ep=${encodeURIComponent(ep.slug)}`);
+    let link = document.querySelector('link[rel="canonical"]');
+    if (!link) { link = document.createElement('link'); link.rel = 'canonical'; document.head.appendChild(link); }
+    link.href = href;
+  }
+
   // נתונים מובנים למנועי חיפוש
   document.querySelectorAll('script[type="application/ld+json"]').forEach((x) => x.remove());   // בדף הסטטי כבר יש אחד
   const ld = document.createElement('script');

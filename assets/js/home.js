@@ -13,7 +13,7 @@
   const site = S.site || {};
   document.getElementById('site-header').innerHTML = U.header('home', site);
   document.getElementById('site-footer').innerHTML = U.footer(site);
-  document.title = `${site.name || 'ראש בראש'} — ${site.tagline || 'מוזיקה ואקטואליה'}`;
+  document.title = 'ראש בראש — תוכנית מוזיקה ואקטואליה';
   for (const [sel, key] of [['[data-site-name]', 'name'], ['[data-site-tagline]', 'tagline'], ['[data-site-description]', 'description']]) {
     const el = document.querySelector(sel); if (el && site[key]) { el.textContent = site[key]; if (el.dataset.text != null) el.dataset.text = site[key]; }
   }

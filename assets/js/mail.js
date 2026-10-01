@@ -1,10 +1,23 @@
-/* הדף "טיוטת מייל" (mail.html?ep=… או ?kind=digest / ?kind=note). מגיעים אליו מדף הניהול המשותף — עם קוד
+/* הדף "טיוטת מייל" (mail.html?ep=… או ?kind=digest / ?kind=note) — מעביר לדף הניהול (ראו למטה). מגיעים אליו מדף הניהול המשותף — עם קוד
    מעבר, בלי כניסה נוספת — או ישירות. התוכניות: מה שבאתר (כולל מוסתרות ומתוזמנות, למנהלים)
    ועוד הטיוטה המשותפת של הניהול, כך שאפשר להכין מייל גם לתוכנית שעוד לא פורסמה. */
 (async function () {
   'use strict';
   const U = window.RoshUI, S = window.RoshStore;
   await S.ready;
+  /* עורך טיוטת המייל עבר לדף הניהול של אתר הסקר (החלק „מייל למאזינים”). קישורים ישנים לכאן עוברים
+     לשם — עם קוד מעבר, בלי כניסה נוספת, ועל אותה תוכנית. ?standalone=1 משאיר את העורך כאן (לבדיקות). */
+  if (S.state.source === 'cloudflare' && !U.qs('standalone')) {
+    const origin = new URL(S.sb.cfg.apiBase).origin;
+    const q = new URLSearchParams();
+    if (U.qs('ep')) q.set('mail', U.qs('ep'));
+    if (U.qs('kind')) q.set('kind', U.qs('kind'));
+    document.getElementById('mail-gate-text').textContent = 'עוברים לדף הניהול…';
+    let target = `${origin}/admin${q.size ? `?${q}` : ''}#prog-mail`;
+    if (S.sb.session?.token) { try { target = `${await S.sb.handoff.toSurvey()}${q.size ? `?${q}` : ''}#prog-mail`; } catch { /* נכנסים שם עם Google */ } }
+    location.replace(target);
+    return;
+  }
   const site = S.site || {};
   const $ = (id) => document.getElementById(id);
   const paintHeader = () => { $('site-header').innerHTML = U.header('admin', site); };

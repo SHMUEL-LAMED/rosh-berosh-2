@@ -21,6 +21,9 @@ export async function loadCatalog() {
   }
   fromLive = !!catalog?.episodes?.length;
   if (!fromLive) {
+    // בפריסה (pages.yml) הקטלוג החי חובה: בלי תוכנית חדשה שעלתה היום עדיף לא לפרסם כלום
+    // ולהשאיר באוויר את הפריסה הקודמת, מאשר לפרסם אתר ישן מהעותק שבמאגר.
+    if (process.env.REQUIRE_LIVE_CATALOG) { console.error('live catalog unavailable — not publishing a stale site'); process.exit(1); }
     console.warn('using data/episodes.json');
     catalog = JSON.parse(readFileSync('data/episodes.json', 'utf8'));
   }

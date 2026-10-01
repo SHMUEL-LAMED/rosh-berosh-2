@@ -29,12 +29,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      # הקטלוג החי חובה: אם ה־Worker לא עונה, הפריסה נכשלת והפריסה הקודמת נשארת באוויר —
+      # במקום לפרסם אתר ישן (בלי התוכנית שעלתה היום) מהעותק שבמאגר
       - name: Refresh the saved catalog copy (data/episodes.json) from the live catalog
         run: node scripts/build-saved-catalog.mjs
+        env: { REQUIRE_LIVE_CATALOG: 1 }
       - name: Build the sitemap from the live catalog
         run: node scripts/build-sitemap.mjs
+        env: { REQUIRE_LIVE_CATALOG: 1 }
       - name: Build a static page per episode (episodes/<slug>.html, for search engines)
         run: node scripts/build-episode-pages.mjs
+        env: { REQUIRE_LIVE_CATALOG: 1 }
       # כל פריסה מסמנת את קובצי העיצוב והסקריפטים של האתר ב־?v=<commit>. לשונית שנפתחה לפני הפריסה
       # מזהה את זה במעבר לדף אחר (router.js) וטוענת את הדף מחדש, במקום לצייר דף חדש עם קבצים ישנים;
       # ובלי מעבר — version.json עם אותו ערך, ש־app-update.js בודק (עדכון בכוח).

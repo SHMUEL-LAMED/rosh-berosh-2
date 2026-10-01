@@ -114,7 +114,7 @@ await page.waitForSelector('#admin-gate');
 await page.waitForTimeout(800);
 check(await page.evaluate(() => document.body.classList.contains('admin-locked')), 'הניהול נעול בלי מנהל מחובר');
 check((await page.locator('#gate-google').count()) === 1, 'השער מציע כניסה ישירה עם Google');
-check((await page.locator('#gate-login:visible').count()) === 1 || (await page.locator('#gate-fallback:visible').count()) === 1, 'כשכפתור Google לא נטען יש דרך חלופית להיכנס');
+check((await page.locator('#gate-google button').count()) === 1 && (await page.locator('#gate-login-site').count()) === 0, 'כפתור Google מוצג ללא כניסה חלופית דרך אתר הסקר');
 
 /* ---------- מנהל מחובר ---------- */
 await page.evaluate(() => {

@@ -296,6 +296,8 @@ check((await noticeText()) === 'התשובה נשמרה.', 'תשובה שנשמ�
 check((await page.locator('#stats-min').inputValue()) === '10', 'האזנה נספרת אחרי 10 דקות (ברירת המחדל)');
 await page.selectOption('#stats-min', '5');
 await page.waitForFunction(() => document.querySelector('#stats-min')?.value === '5', null, { timeout: 5000 }).catch(() => {});
+// מחכים שהשמירה תגיע לשרת (הבורר מציג 5 מיד, עוד לפני שהבקשה נשלחה)
+for (let i = 0; i < 50 && statsPosts.at(-1)?.minMinutes !== 5; i++) await page.waitForTimeout(100);
 check(statsPosts.at(-1)?.minMinutes === 5 && (await page.locator('#stats-min').inputValue()) === '5', 'שינוי הסף נשמר בשרת והמספרים נטענים מחדש');
 await page.click('[data-op="stats-reset"]');
 await page.waitForFunction(() => document.querySelector('#stats-since')?.value === '2026-09-25', null, { timeout: 5000 }).catch(() => {});

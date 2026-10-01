@@ -699,13 +699,12 @@
   });
 
 
-  /* הצעה להתחבר: פעם אחת בכל ביקור, רק למי שעוד לא מחובר. */
+  /* הצעה להתחבר בכל טעינת אתר, רק למי שעוד לא מחובר. */
   async function offerLogin() {
     const S = window.RoshStore;
     await S.state.verified;
     if (S.sb.user || !S.sb.configured || S.state.embed || S.state.preview || S.state.live || window.top !== window) return;
     if (/(?:admin|mail)\.html$/.test(location.pathname)) return;
-    try { if (sessionStorage.getItem('rosh:login-offered')) return; sessionStorage.setItem('rosh:login-offered', '1'); } catch { /* אחסון חסום */ }
     if (document.getElementById('login-welcome')) return;
     const d = document.createElement('dialog');
     d.id = 'login-welcome'; d.className = 'login-welcome';

@@ -6,9 +6,9 @@
    - רושם את sw.js (רק ב־https; data-sw="off" על תגית הסקריפט מדלג — אזור הניהול ועורך המייל).
    - הגרסה: כל פריסה מסמנת את הסקריפט ב־?v=<commit> וכותבת את אותו ערך ל־version.json
      (pages.yml). הדף שואל את version.json כל שתי דקות, וכשחוזרים ללשונית, לחלון או לרשת;
-     ערך אחר = גרסה חדשה. גם החלפת sw.js בגרסה חדשה (controllerchange) נחשבת עדכון.
+     ערך אחר = גרסה חדשה. החלפת sw.js בגרסה חדשה (controllerchange) מפעילה בדיקה מיידית.
      מקומית (בלי ?v=) אין בדיקה.
-   - הטעינה מחכה לרגע בטוח: לא בזמן ניגון (body.is-playing או נגן שמתנגן), לא באמצע הקלדה,
+   - הטעינה מחכה לרגע בטוח: לא בזמן ניגון (גם טעינה או קפיצה בהקלטה), לא באמצע הקלדה או עם טקסט שלא נשלח,
      לא כשחלון (dialog) פתוח, ולא כל עוד דף מחזיק (window.RoshBusy — רשימת פונקציות; הניהול
      מחזיק כשיש שינויים שלא נשמרו, שמירה, פרסום, העלאה או עבודה שרצה). בדף ניהול שלא רשם
      פונקציה משלו (עורך המייל) כל הקלדה מחזיקה, כי אין דרך לדעת אם נשמרה.
@@ -25,23 +25,40 @@
   var versionUrl = src ? new URL('../../version.json', src).href : '';   // assets/js/ → שורש האתר
 
   var CHECK_EVERY = 2 * 60 * 1000, MIN_GAP = 30 * 1000, SAFE_RETRY = 3000, SAME_VERSION_PAUSE = 10 * 60 * 1000;
-  var RELOADED_KEY = 'rosh-reloaded-for';
+  var RELOADED_KEY = 'rosh-reloaded-for', SCROLL_KEY = 'rosh-reload-scroll';
+
+  // אחרי טעינה בכוח: חוזרים למקום שבו הקורא היה (התוכן מצויר אחרי שהקטלוג נטען — מנסים עד שהדף ארוך מספיק)
+  (function restoreScroll() {
+    var saved = null;
+    try { saved = JSON.parse(sessionStorage.getItem(SCROLL_KEY) || 'null'); sessionStorage.removeItem(SCROLL_KEY); } catch (e) { saved = null; }
+    if (!saved || saved.url !== location.href || !(saved.y > 0)) return;
+    var tries = 0;
+    (function go() {
+      window.scrollTo(0, saved.y);
+      if (Math.abs(window.scrollY - saved.y) > 2 && tries++ < 50) setTimeout(go, 100);
+    })();
+  })();
 
   var registration = null;
   var hadController = !!(sw && sw.controller);   // בטעינה הראשונה אין — אז החלפה אינה "עדכון"
   if (sw && location.protocol === 'https:' && !tool) {
     sw.register(new URL('sw.js', document.baseURI).href).then(function (reg) { registration = reg; }).catch(function () {});
   }
+  // Service Worker חדש: בודקים את version.json — דף שכבר נטען מחדש לגרסה החדשה לא נטען פעם שנייה
   if (sw) sw.addEventListener('controllerchange', function () {
     if (!hadController) { hadController = true; return; }
-    reloadWhenSafe('sw');
+    check(true);
   });
 
   var typed = false;
   if (tool) document.addEventListener('input', function () { typed = true; }, true);
 
   function playing() {
-    if (document.body && document.body.classList.contains('is-playing')) return true;
+    // הנגן (new Audio()) לא נמצא ב־DOM, ו־body.is-playing יורד בזמן טעינה, קפיצה ותקיעה (waiting) — שואלים את הנגן עצמו:
+    // playing אם יש לו (לא מושהה, לא נגמר ולא נכשל), ואחרת "לא מושהה" — מתנגן או ממתין לנתונים
+    var P = window.RoshPlayer;
+    if (P) { if (typeof P.playing === 'boolean' ? P.playing : !P.paused) return true; }
+    else if (document.body && document.body.classList.contains('is-playing')) return true;
     var media = document.querySelectorAll('audio, video');
     for (var i = 0; i < media.length; i++) if (!media[i].paused && !media[i].ended) return true;
     return false;
@@ -58,14 +75,21 @@
     for (var i = 0; i < list.length; i++) { try { if (list[i]()) return true; } catch (e) { return true; } }
     return tool && !list.length && typed;
   }
-  function busy() { return playing() || typing() || !!document.querySelector('dialog[open]') || held(); }
+  /** טקסט שנכתב ועוד לא נשלח (הודעה למגישים, תגובה) — גם כשהפוקוס כבר לא בתיבה.
+      (בדפי הניהול window.RoshBusy / typed קובעים — שם התיבות מתמלאות מהטיוטה) */
+  function unsent() {
+    var t = document.querySelectorAll('textarea');
+    for (var i = 0; i < t.length; i++) if (t[i].value.trim() && t[i].value !== t[i].defaultValue) return true;
+    return false;
+  }
+  function busy() { return playing() || typing() || (!tool && unsent()) || !!document.querySelector('dialog[open]') || held(); }
 
   function mayReload(version) {
     try {
       var last = JSON.parse(sessionStorage.getItem(RELOADED_KEY) || 'null');
       if (last && last.v === version && Date.now() - (last.at || 0) < SAME_VERSION_PAUSE) return false;
       sessionStorage.setItem(RELOADED_KEY, JSON.stringify({ v: version, at: Date.now() }));
-    } catch (e) { /* בלי sessionStorage — טוענים בכל זאת */ }
+    } catch (e) { return false; }   // בלי sessionStorage אין דרך לזהות מעגל טעינות — לא טוענים (הגרסה תתעדכן במעבר הבא לדף)
     return true;
   }
 
@@ -76,7 +100,10 @@
       if (busy()) return;
       clearInterval(waiting);
       done = true;
-      if (mayReload(version)) location.reload();
+      if (mayReload(version)) {
+        try { sessionStorage.setItem(SCROLL_KEY, JSON.stringify({ url: location.href, y: window.scrollY })); } catch (e) { /* */ }
+        location.reload();
+      }
     }
     waiting = setInterval(attempt, SAFE_RETRY);
     attempt();

@@ -58,7 +58,7 @@
     ${feat.number != null ? `<strong>תוכנית ${feat.number}</strong>` : ''}
   </div>
   <div class="ep-hero">
-    <div class="cover"${feat.cover === 'assets/img/album-chart-25-results.jpg' ? ' style="aspect-ratio:9/16;height:auto"' : ''}>${feat.cover ? `<img src="${esc(feat.cover)}" alt="" fetchpriority="high" decoding="async">` : `<div class="vinyl live" data-num="${feat.number ?? '♫'}" style="--label:${U.hue(feat)}" data-vinyl="${esc(feat.id)}"><i></i></div>`}</div>
+    <div class="cover"${feat.cover === 'assets/img/album-chart-25-results.jpg' ? ' style="width:100%;max-width:240px;height:auto;justify-self:center"' : ''}>${feat.cover ? `<img src="${esc(feat.cover)}" alt=""${feat.cover === 'assets/img/album-chart-25-results.jpg' ? ' style="display:block;width:100%;height:auto;aspect-ratio:auto;object-fit:contain"' : ''} fetchpriority="high" decoding="async">` : `<div class="vinyl live" data-num="${feat.number ?? '♫'}" style="--label:${U.hue(feat)}" data-vinyl="${esc(feat.id)}"><i></i></div>`}</div>
     <div>
       <div class="meta">
         ${feat.date ? `<span class="pill">${esc(U.fmtWeekday(feat.date))}, ${esc(fmtDate(feat.date))}</span><span class="pill">${esc(U.fmtHebDate(feat.date))}</span>` : ''}

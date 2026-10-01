@@ -58,6 +58,9 @@ assert(!M.build(ep, { ...ctx, downloadUrl: '' }, {}).html.includes('הורדת �
 const same = (a, b) => assert.equal(JSON.stringify(a), JSON.stringify(b));
 same(M.parseEmails('A@x.com; b@y.co, bad, a@x.com\n"c@z.org",email,name\nd@w.org,דוד\nשרה <Sara@Mail.co.il>.'), ['a@x.com', 'b@y.co', 'c@z.org', 'd@w.org', 'sara@mail.co.il']);
 same(M.parseEmails('email,name\n"x@y.com","מאזין"\n'), ['x@y.com']);
+// סימני כיוון ותווים בלתי נראים סביב הכתובת (וואטסאפ, וורד) לא נכנסים אליה
+same(M.parseEmails('‪david@gmail.com‬\nשרה ‏sara@walla.co.il‏\n​zed@x.org﻿, ⁦David@Gmail.com⁩'), ['david@gmail.com', 'sara@walla.co.il', 'zed@x.org']);
+same(M.checkAddresses(M.parseEmails('‪b@gmial.com‬')).typos, [{ email: 'b@gmial.com', fix: 'b@gmail.com' }]);
 same(M.chunk([1, 2, 3, 4, 5], 2), [[1, 2], [3, 4], [5]]);
 
 // MIME: הנושא בעברית מקודד במילים של עד 75 תווים, הרשימה בעותק מוסתר, שני חלקים

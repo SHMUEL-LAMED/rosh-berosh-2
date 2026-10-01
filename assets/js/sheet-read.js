@@ -66,11 +66,16 @@
     return lines.join('\n');
   }
 
-  /** קובץ שנבחר → טקסט: אקסל נפתח, CSV וטקסט נקראים כמו שהם */
+  /** קובץ שנבחר → טקסט: אקסל נפתח, CSV וטקסט נקראים לפי הקידוד שלהם */
   async function text(file) {
     if (/\.xlsx$/i.test(file.name || '') || file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') return xlsxText(new Uint8Array(await file.arrayBuffer()));
     if (/\.xls$/i.test(file.name || '')) throw new Error('קובץ אקסל ישן (.xls) לא נתמך. שמרו אותו כ־xlsx או כ־CSV ונסו שוב.');
-    return file.text();
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    // "טקסט Unicode" מאקסל: UTF-16 עם BOM
+    const bom = bytes[0] === 0xff && bytes[1] === 0xfe ? 'utf-16le' : bytes[0] === 0xfe && bytes[1] === 0xff ? 'utf-16be' : '';
+    if (bom) return new TextDecoder(bom).decode(bytes);
+    try { return new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
+    catch { return new TextDecoder('windows-1255').decode(bytes); }   // CSV שאקסל בעברית שמר ("CSV (מופרד בפסיקים)") — לא UTF-8
   }
 
   window.RoshSheet = { text, xlsxText };

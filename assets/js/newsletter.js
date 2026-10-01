@@ -97,7 +97,7 @@
     links: { name: 'קישורים מדף התוכנית', hint: 'הקישורים הציבוריים של התוכנית', kinds: ['episode'] },
     cta: { name: 'כפתור נוסף', hint: 'הצבעה, סקר, הרשמה — כל קישור', kinds: ALL },
     more: { name: 'עוד תוכניות', hint: 'התוכניות האחרונות שאולי פספסו', kinds: ['episode', 'note'] },
-    share: { name: 'שיתוף עם חברים', hint: 'וואטסאפ ומייל לחבר', kinds: ALL },
+    share: { name: 'שיתוף עם חברים', hint: 'שליחה לחבר במייל', kinds: ALL },
     signature: { name: 'חתימה', hint: 'בסוף המייל', kinds: ALL },
   };
   const DEFAULT_BLOCKS = [['intro', 1], ['items', 1], ['buttons', 1], ['description', 1], ['tracks', 1], ['quote', 1], ['links', 1], ['cta', 1], ['more', 0], ['share', 0], ['signature', 1]].map(([id, on]) => ({ id, on: !!on }));
@@ -189,7 +189,7 @@
       description: String(episode?.description || ''), descTitle: 'על התוכנית',
       tracksTitle: 'השירים בתוכנית', quote: '', quoteBy: '', ctaLabel: '', ctaUrl: '',
       moreTitle: 'עוד תוכניות שכדאי לשמוע', moreCount: 3,
-      shareTitle: 'מכירים מישהו שייהנה?', shareText: 'העבירו לו את המייל, או שלחו לו את התוכנית בוואטסאפ.',
+      shareTitle: 'מכירים מישהו שייהנה?', shareText: 'העבירו לו את המייל או שלחו לו קישור לתוכנית.',
       preheader: '', signature: `שבוע טוב ומוזיקלי,\nצוות ${name}`,
       show: { description: true, guests: true, links: true, download: true, phone: true, unsubscribe: true, tagline: true },
       // blocks: הסדר ומה פעיל — כשאין, blocksFor() נותן את ברירת המחדל
@@ -246,7 +246,6 @@
       primary: `background:${p.accent};color:${p.accentInk};border:2px solid ${p.accent}`,
       ghost: `background:transparent;color:${p.text};border:2px solid ${p.border}`,
       outline: `background:transparent;color:${p.link};border:2px solid ${p.accent}`,
-      whatsapp: 'background:#178a47;color:#ffffff;border:2px solid #178a47',
     };
     const button = (b) => `<a href="${esc(b.href)}" target="_blank" style="display:inline-block;padding:14px 26px;border-radius:${radius}px;font-family:${F.sans};font-size:16px;font-weight:900;line-height:1.2;text-align:center;white-space:nowrap;text-decoration:none;mso-padding-alt:0;${BTN[b.look] || BTN.ghost}">${esc(b.text)}</a>`;
     const buttons = (list) => `<table role="presentation" class="bts" cellpadding="0" cellspacing="0" border="0" dir="rtl"><tr>${list.map((b, i) => td(button(b), `padding:6px 0 6px ${i < list.length - 1 ? 10 : 0}px`, 'class="bt"')).join('')}</tr></table>`;
@@ -321,10 +320,9 @@ ${td(`${m ? `<p style="margin:0 0 4px;font-family:${F.sans};font-size:12.5px;fon
       share: () => {
         if (!shareUrl) return null;
         const st = t(o.shareTitle).trim(), sb = t(o.shareText).trim();
-        const wa = `https://wa.me/?text=${encodeURIComponent(`${headline} — ${name}\n${shareUrl}`)}`;
         const mail = `mailto:?subject=${encodeURIComponent(`${headline} · ${name}`)}&body=${encodeURIComponent(`${headline}\n${shareUrl}`)}`;
         return {
-          html: row(box(`${secTitle(st)}${sb ? R(sb, { size: 15, mb: 8 }) : ''}${buttons([{ href: wa, text: 'שיתוף בוואטסאפ', look: 'whatsapp' }, { href: mail, text: '✉ שליחה לחבר במייל', look: 'ghost' }])}`, `padding:16px 20px 10px;border:1px dashed ${p.border};border-radius:18px`)),
+          html: row(box(`${secTitle(st)}${sb ? R(sb, { size: 15, mb: 8 }) : ''}${buttons([{ href: mail, text: '✉ שליחה לחבר במייל', look: 'ghost' }])}`, `padding:16px 20px 10px;border:1px dashed ${p.border};border-radius:18px`)),
           text: [st, plain(sb), shareUrl].filter(Boolean).join('\n'),
         };
       },

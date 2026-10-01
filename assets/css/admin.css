@@ -337,7 +337,7 @@ body.embed .live-pane { top: 70px; }
 .story-frame.ready .notice-spinner { display: none; }
 .share-side { display: grid; gap: 12px; min-width: 0; }
 .share-text-head { display: flex; align-items: center; gap: 10px; justify-content: space-between; }
-.share-text .whatsapp-text { font-size: 13.5px; line-height: 1.6; max-height: 170px; overflow: auto; }
+.share-text .share-copy-text { font-size: 13.5px; line-height: 1.6; max-height: 170px; overflow: auto; }
 .share-clip { padding: 14px; border: 1px dashed rgb(var(--gold-rgb) / .5); border-radius: var(--radius-13); display: grid; gap: 10px; }
 .clip-opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
 .clip-video { width: min(240px, 100%); aspect-ratio: 9 / 16; border-radius: 14px; background: #000; }

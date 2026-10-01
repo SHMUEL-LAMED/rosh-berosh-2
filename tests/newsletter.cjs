@@ -131,7 +131,7 @@ assert(!Buffer.from(M.raw({ to: ['me@example.com'], subject: 'x', html: '<p>x</p
   assert(r.html.includes('href="https://vote.example/"') && r.text.includes('להצבעה במצעד: https://vote.example/'), 'Extra button');
   assert(r.html.includes('utm_source=email&amp;t=754') && r.html.includes('>12:34</a>') && r.text.includes('12:34  שיר — זמר'), 'Track list with a link to the moment');
   assert(r.html.includes('תוכנית קודמת') && !r.html.includes('עוד אחת'), 'More programs, up to the chosen count');
-  assert(r.html.includes('https://wa.me/?text=') && r.html.includes(encodeURIComponent('https://api.example/p/2026-09-19')) && r.html.includes('mailto:?subject='), 'WhatsApp share and mail-a-friend');
+  assert(r.html.includes(encodeURIComponent('https://api.example/p/2026-09-19')) && r.html.includes('mailto:?subject='), 'Mail-a-friend');
   // בלוק חדש שלא היה בשמירה הישנה נכנס במקומו, כבוי או דלוק כברירת המחדל
   const ids = M.blocksFor({ blocks: [{ id: 'signature', on: true }, { id: 'intro', on: false }] });
   assert.equal(ids.length, Object.keys(M.BLOCKS).length);

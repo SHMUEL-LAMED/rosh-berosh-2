@@ -283,7 +283,6 @@ ${comments.length ? `<ul class="comment-list">${comments.map((c) => commentHtml(
   ${stream ? `<div class="share-from"><label class="check"><input type="checkbox" data-from ${here ? 'checked' : ''}> <span>להתחיל מ־</span></label><input class="input" data-at dir="ltr" inputmode="numeric" value="${fmtTime(here)}" aria-label="נקודת ההתחלה (דקות:שניות)" ${here ? '' : 'disabled'}>${Pl.isCurrent(ep.id) ? '<button type="button" class="btn ghost small" data-now>הרגע הנוכחי</button>' : ''}</div><p class="share-hint" data-hint></p>` : ''}
   <label class="field"><span>הקישור</span><input class="input" data-link readonly dir="ltr"></label>
   <div class="share-ops">
-    <a class="btn primary" data-wa target="_blank" rel="noopener">וואטסאפ</a>
     <button type="button" class="btn" data-copy>העתקת הקישור</button>
     ${navigator.share ? '<button type="button" class="btn" data-sys>עוד אפשרויות…</button>' : ''}
   </div>
@@ -302,7 +301,6 @@ ${comments.length ? `<ul class="comment-list">${comments.map((c) => commentHtml(
       $('[data-hint]')?.classList.toggle('bad', !!bad);
       const url = U.shareUrl(ep, bad ? 0 : t);
       $('[data-link]').value = url;
-      $('[data-wa]').href = `https://wa.me/?text=${encodeURIComponent(`${ep.title}${t && !bad ? ` (מ־${fmtTime(t)})` : ''}\n${url}`)}`;
     };
     paint();
     d.addEventListener('input', paint);

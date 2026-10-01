@@ -250,7 +250,7 @@
 
   /* ---------- Cloudflare: אותו D1 ואותו אימות Google של אתר הסקר ---------- */
 
-  /** מאיפה הגיע הביקור הזה (לסטטיסטיקה, בלי שום פרט מזהה): מייל, וואטסאפ, גוגל, פייסבוק, ישיר או אחר */
+  /** מאיפה הגיע הביקור הזה (לסטטיסטיקה, בלי שום פרט מזהה): מייל, גוגל, פייסבוק, ישיר או אחר */
   function visitSource() {
     try {
       const saved = sessionStorage.getItem('rosh:ref'); if (saved) return saved;
@@ -258,7 +258,6 @@
       const ref = document.referrer ? new URL(document.referrer) : null;
       const host = ref?.hostname || '';
       const src = /^(e-?mail|newsletter)$/i.test(utm) ? 'email'
-        : /whatsapp/i.test(utm) || /whatsapp|wa\.me/.test(host) ? 'whatsapp'
         : /google\./.test(host) || /google/i.test(utm) ? 'google'
         : /facebook|fb\.|instagram/.test(host) || /facebook/i.test(utm) ? 'facebook'
         : !ref ? 'direct'

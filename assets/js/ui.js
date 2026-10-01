@@ -151,7 +151,7 @@
     const id = driveId(ep);
     return id ? driveDirect(id) : streamUrl(ep);
   }
-  /** קישור לשיתוף: דף קטן בשרת שמציג בוואטסאפ את שם התוכנית והתמונה, ומעביר לדף התוכנית */
+  /** קישור לשיתוף: דף קטן בשרת שמציג בתצוגה מקדימה את שם התוכנית והתמונה, ומעביר לדף התוכנית */
   function shareUrl(ep, t = 0) {
     const base = apiBase();
     const tail = t > 5 ? `?t=${Math.floor(t)}` : '';

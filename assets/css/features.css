@@ -140,7 +140,7 @@
 .moment-del:hover { color: var(--error); }
 .hot-list { margin: 8px 0 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 6px; }
 .title-ideas { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-.whatsapp-text { white-space: pre-line; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); margin-top: 8px; }
+.share-copy-text { white-space: pre-line; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); margin-top: 8px; }
 
 /* ---------- מצב חג (extras.js): ברכה מתחת לשם, גוון חגיגי, וקישוט שנופל פעם אחת ---------- */
 .brand small.holiday-line { display: flex; align-items: center; gap: 6px; letter-spacing: .02em; font-size: 12px; font-weight: 800; color: hsl(var(--holiday-hue, 42) 85% 62%); }

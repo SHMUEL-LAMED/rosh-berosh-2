@@ -1175,17 +1175,17 @@ ${s.moments?.top?.length ? `<p class="kicker" style="margin-top:14px">הרגעי
     }
     A.share = { id: e.id, story: null, clip: null };
     const hot = A.epStats.get(e.id)?.moments?.top?.[0]?.at;
-    const texts = [['whatsapp', 'לוואטסאפ', shareText(e)], ['social', 'לפייסבוק ולאינסטגרם', socialText(e, 'social')], ['short', 'קצר, לסטטוס', socialText(e, 'short')]];
+    const texts = [['message', 'טקסט לשיתוף', shareText(e)], ['social', 'לפייסבוק ולאינסטגרם', socialText(e, 'social')], ['short', 'קצר, לסטטוס', socialText(e, 'short')]];
     const canClip = !!clipType() && !!U.streamUrl(e);
     d.innerHTML = `<div class="section-title"><div><p class="kicker">ערכת שיתוף</p><h2 id="dlg-share-title">${esc(label(e))}</h2></div><button type="button" class="icon-btn" data-close aria-label="סגירה">✕</button></div>
 <div class="card-body share-kit">
   <div class="share-visual">
     <div class="story-frame"><img id="story-img" alt="תמונת סטורי של התוכנית"><span class="notice-spinner" aria-hidden="true"></span></div>
     <div class="actions" style="margin:0"><button type="button" class="btn small gold" data-sh="story-dl" disabled>הורדת התמונה</button><button type="button" class="btn small" data-sh="story-share" hidden>שיתוף…</button></div>
-    <p class="cue-hint">גודל של סטורי (1080×1920) — לאינסטגרם, לסטטוס בוואטסאפ ולפייסבוק.</p>
+    <p class="cue-hint">גודל של סטורי (1080×1920) — לאינסטגרם, לסטטוס ולפייסבוק.</p>
   </div>
   <div class="share-side">
-    ${texts.map(([k, t, text]) => `<div class="share-text"><div class="share-text-head"><b>${t}</b><button type="button" class="btn small" data-sh="copy" data-text="${esc(text)}">העתקה</button></div><div class="whatsapp-text">${esc(text)}</div></div>`).join('')}
+    ${texts.map(([k, t, text]) => `<div class="share-text"><div class="share-text-head"><b>${t}</b><button type="button" class="btn small" data-sh="copy" data-text="${esc(text)}">העתקה</button></div><div class="share-copy-text">${esc(text)}</div></div>`).join('')}
     <div class="share-clip">
       <p class="kicker">קליפ וידאו קצר</p>
       ${canClip ? `<p class="help">הסטורי עם גל קול שזז לפי ההקלטה. הקליפ מוקלט בזמן אמת — השאירו את החלון פתוח עד הסוף.</p>
@@ -1236,7 +1236,7 @@ ${s.moments?.top?.length ? `<p class="kicker" style="margin-top:14px">הרגעי
         const ext = blob.type.includes('mp4') ? 'mp4' : 'webm';
         sh.clip = new File([blob], `clip-${e.slug || e.id}.${ext}`, { type: blob.type });
         status.textContent = '✓ הקליפ מוכן';
-        out.innerHTML = `<video class="clip-video" controls playsinline src="${URL.createObjectURL(blob)}"></video><div class="actions" style="margin:0"><button type="button" class="btn small gold" data-sh="clip-dl">הורדת הקליפ</button>${canShareFile(sh.clip) ? '<button type="button" class="btn small" data-sh="clip-share">שיתוף…</button>' : ''}</div>${ext === 'webm' ? '<p class="cue-hint">הקובץ בפורמט WebM. וואטסאפ ואינסטגרם בטלפון מעדיפים MP4 — אם לא עולה, העבירו אותו דרך ממיר.</p>' : ''}`;
+        out.innerHTML = `<video class="clip-video" controls playsinline src="${URL.createObjectURL(blob)}"></video><div class="actions" style="margin:0"><button type="button" class="btn small gold" data-sh="clip-dl">הורדת הקליפ</button>${canShareFile(sh.clip) ? '<button type="button" class="btn small" data-sh="clip-share">שיתוף…</button>' : ''}</div>${ext === 'webm' ? '<p class="cue-hint">הקובץ בפורמט WebM. יישומים מסוימים בטלפון מעדיפים MP4 — אם לא עולה, העבירו אותו דרך ממיר.</p>' : ''}`;
       } catch (err) { status.textContent = err.message; }
       b.disabled = false;
     }
@@ -1245,7 +1245,7 @@ ${s.moments?.top?.length ? `<p class="kicker" style="margin-top:14px">הרגעי
   /* ---------- תמונה אוטומטית: עטיפה בסגנון האתר על קנבס ---------- */
 
   /* העטיפה ריבועית (1400×1400) — כך היא מופיעה במלואה בדף התוכנית, במסך הנעילה
-     ובתצוגה המקדימה בוואטסאפ. בכרטיסים (יחס 1.45) נחתכים רק הקצוות העליון
+     ובתצוגה המקדימה של הקישור. בכרטיסים (יחס 1.45) נחתכים רק הקצוות העליון
      והתחתון, ולכן כל הטקסט יושב ברצועה האמצעית שנשארת גלויה תמיד. */
   const COVER = 1400, SAFE_TOP = 250, SAFE_BOTTOM = 1150;
   async function drawCover(e) {
@@ -1580,7 +1580,7 @@ ${s.moments?.top?.length ? `<p class="kicker" style="margin-top:14px">הרגעי
   <button type="button" class="btn small" data-op="ai-transcript" aria-expanded="${st.transcript != null}">${st.transcript != null ? 'הסתרת התמלול' : 'הצגת התמלול'}</button>
   <button type="button" class="btn small" data-op="ai-titles" ${st.titlesBusy ? 'disabled' : ''}>${st.titlesBusy ? 'חושבים על שמות…' : 'הצעות לשם התוכנית'}</button>
 </div>
-${st.titles ? `<div class="ai-result"><p class="kicker">הצעות לשם — לחיצה מחליפה את השם</p><div class="title-ideas">${st.titles.map((t, i) => `<button type="button" class="chip" data-op="ai-title-use" data-i="${i}">${esc(t)}</button>`).join('')}</div>${st.whatsapp ? `<p class="kicker" style="margin-top:12px">טקסט לוואטסאפ</p><div class="whatsapp-text">${esc(st.whatsapp)}</div><div class="actions"><button type="button" class="btn small" data-op="copy" data-text="${esc(st.whatsapp)}">העתקה</button></div>` : ''}</div>` : ''}
+${st.titles ? `<div class="ai-result"><p class="kicker">הצעות לשם — לחיצה מחליפה את השם</p><div class="title-ideas">${st.titles.map((t, i) => `<button type="button" class="chip" data-op="ai-title-use" data-i="${i}">${esc(t)}</button>`).join('')}</div></div>` : ''}
 ${st.text ? `<p class="upload-status" role="status"><span class="notice-spinner" aria-hidden="true"></span> ${esc(st.text)}</p>` : ''}
 ${st.error ? `<p class="problems">${esc(st.error)}</p>` : ''}
 ${sum ? `<div class="ai-result">
@@ -1732,7 +1732,7 @@ ${window.RoshPollAdmin?.siteCard() || ''}
     paintDash(); paintEpStats();
   }
   /* ---------- סטטיסטיקה מעמיקה: מאיפה מגיעים, מתי מאזינים, מה אוהבים, ועד איפה שומעים ---------- */
-  const SOURCE_NAMES = { email: 'מייל (רשימת התפוצה)', whatsapp: 'וואטסאפ', google: 'גוגל', facebook: 'פייסבוק', direct: 'ישיר (קישור או כתובת)', internal: 'מתוך האתר', other: 'אחר' };
+  const SOURCE_NAMES = { email: 'מייל (רשימת התפוצה)', google: 'גוגל', facebook: 'פייסבוק', direct: 'ישיר (קישור או כתובת)', internal: 'מתוך האתר', other: 'אחר' };
   function hbars(rows) {
     const max = Math.max(1, ...rows.map((r) => r.n));
     return `<div class="hbars">${rows.map((r) => `<div class="hbar"><span>${esc(r.label)}</span><i style="--w:${Math.round(r.n / max * 100)}%"></i><b>${n2(r.n)}</b></div>`).join('')}</div>`;
@@ -2589,7 +2589,7 @@ ${proofCard()}
       case 'ai-run': if (e) aiRun(e).catch(() => {}); break;
       case 'ai-titles': if (e) {
         const st = A.ai.get(e.id) || {}; A.ai.set(e.id, st); st.titlesBusy = true; st.error = ''; paintAi();
-        try { const r = await S.sb.call('/api/program/ai/titles', { method: 'POST', body: { episodeId: e.id } }); st.titles = r.titles || []; st.whatsapp = r.whatsapp || ''; }
+        try { const r = await S.sb.call('/api/program/ai/titles', { method: 'POST', body: { episodeId: e.id } }); st.titles = r.titles || [];  }
         catch (err) { st.error = err.status === 409 ? 'קודם צריך לתמלל את ההקלטה (הכפתור "תמלול ויצירת תיאור").' : err.message; }
         st.titlesBusy = false; paintAi();
       } break;

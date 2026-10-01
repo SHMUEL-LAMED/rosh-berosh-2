@@ -444,7 +444,7 @@
         case 'links': return `<small class="mc-note">${e && U.publicLinks(e).length ? 'הקישורים הציבוריים מדף התוכנית (בלי קישורי הדרייב).' : 'לתוכנית הזו אין קישורים ציבוריים — הבלוק לא יופיע.'}</small>`;
         case 'cta': return `<div class="form-grid">${field('ctaLabel', 'הטקסט על הכפתור', 'maxlength="50" placeholder="למשל: להצבעה במצעד"')}${field('ctaUrl', 'הקישור', 'class="ltr" type="url" placeholder="https://…"')}</div><small class="mc-note">נשמר גם למיילים הבאים. ריק — הכפתור לא יופיע.</small>`;
         case 'more': return `<div class="form-grid">${field('moreTitle', 'הכותרת', 'maxlength="60"')}<label class="field"><span>כמה תוכניות</span><select data-m="moreCount">${[1, 2, 3, 4].map((n) => `<option value="${n}" ${o.moreCount === n ? 'selected' : ''}>${n}</option>`).join('')}</select></label></div><small class="mc-note">התוכניות האחרונות שכבר באתר${st.kind === 'episode' ? ', בלי זו שהמייל עליה' : ''}.</small>`;
-        case 'share': return `${field('shareTitle', 'הכותרת', 'maxlength="80"')}<label class="field"><span>הטקסט</span><textarea data-m="shareText" rows="2">${esc(o.shareText)}</textarea></label><small class="mc-note">כפתור וואטסאפ עם הקישור ${st.kind === 'episode' ? 'לתוכנית' : 'לאתר'}, וכפתור לשליחה לחבר במייל.</small>`;
+        case 'share': return `${field('shareTitle', 'הכותרת', 'maxlength="80"')}<label class="field"><span>הטקסט</span><textarea data-m="shareText" rows="2">${esc(o.shareText)}</textarea></label><small class="mc-note">קישור ${st.kind === 'episode' ? 'לתוכנית' : 'לאתר'} וכפתור לשליחה לחבר במייל.</small>`;
         case 'signature': return ta('signature', 2);
         default: return '';
       }
@@ -461,7 +461,7 @@
         case 'links': { const n = e ? U.publicLinks(e).length : 0; return n ? `${fmtN(n)} קישורים` : 'אין קישורים'; }
         case 'cta': return o.ctaLabel && o.ctaUrl ? o.ctaLabel : 'ריק — לא יופיע';
         case 'more': return `${o.moreCount} תוכניות`;
-        case 'share': return 'וואטסאפ ומייל לחבר';
+        case 'share': return 'שליחה לחבר במייל';
         case 'signature': return short(o.signature.split('\n')[0]) || 'בלי חתימה';
         default: return '';
       }

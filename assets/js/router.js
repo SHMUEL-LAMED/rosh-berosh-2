@@ -22,7 +22,8 @@
   let navigating = 0;
 
   const App = {
-    get signal() { return controller.signal; },
+    // סקריפט דף שנטען באיחור (כבר עברו לדף אחר) מקבל את האות של הדף שלו — שכבר בוטל — ולא מצייר על הדף החדש
+    get signal() { return document.currentScript?.roshSignal || controller.signal; },
     navigate,
   };
   window.RoshApp = App;
@@ -71,6 +72,10 @@
     navigate(url.href);
   });
   let current = location.pathname + location.search;
+  // דפים שמחליפים את הכתובת בעצמם (סינון בארכיון, ?sso= / ?handoff= ב־store.js): "הדף הנוכחי" מתעדכן איתם,
+  // אחרת לחיצה על עוגן באותו דף נראית כמו מעבר לדף אחר — והדף כולו נטען ומצויר מחדש
+  const replaceState = history.replaceState.bind(history);
+  history.replaceState = function (state, title, u) { replaceState(state, title, u); current = location.pathname + location.search; };
   window.addEventListener('popstate', (e) => {
     clearTimeout(scrollTimer);   // שמירה שממתינה שייכת לכניסה הקודמת
     const y = e.state?.scrollY;
@@ -120,21 +125,29 @@
   async function navigate(href, { push = true, y = null } = {}) {
     const url = new URL(href, document.baseURI);
     const ticket = ++navigating;
+    // טעינה רגילה. ב"אחורה"/"קדימה" הכתובת כבר הוחלפה, ו־location.href לאותה כתובת עם #עוגן רק גולל — לא טוען
+    const hard = () => { if (push) location.href = url.href; else location.reload(); };
     let html;
     try {
       const r = await fetch(url.pathname + url.search, { credentials: 'same-origin' });
       if (!r.ok) throw new Error(String(r.status));
       html = await r.text();
-    } catch { location.href = url.href; return; }   // בלי רשת או דף שלא נמצא — טעינה רגילה
+    } catch { hard(); return; }   // בלי רשת או דף שלא נמצא — טעינה רגילה
     if (ticket !== navigating) return;               // לחצו בינתיים על קישור אחר
     const doc = new DOMParser().parseFromString(html, 'text/html');
     // גרסה חדשה של האתר עלתה בינתיים (הפריסה מסמנת את קובצי העיצוב והסקריפטים ב־?v=): טעינה רגילה,
     // כדי שהדף החדש לא יצויר עם העיצוב והסקריפטים המשותפים של הגרסה הקודמת
     const build = (d) => d.querySelector('link[rel="stylesheet"][href*="rosh.css?v="]')?.getAttribute('href').split('?v=')[1] || '';
-    if (build(doc) !== build(document)) { location.href = url.href; return; }
+    // בזמן ניגון (גם טעינה או קפיצה בהקלטה) לא טוענים — הטעינה הייתה עוצרת את ההאזנה. מחליפים כרגיל,
+    // ו־app-update.js טוען את הגרסה החדשה ברגע בטוח (כשהניגון נעצר)
+    if (build(doc) !== build(document)) {
+      const P = window.RoshPlayer;
+      if (!P || !(typeof P.playing === 'boolean' ? P.playing : !P.paused)) { hard(); return; }
+      window.RoshAppUpdate?.check();
+    }
     const shell = doc.querySelector('.shell');
     const script = [...doc.querySelectorAll('script[src]')].find((s) => PAGE_SCRIPT.test(s.getAttribute('src')));
-    if (!shell || !script) { location.href = url.href; return; }
+    if (!shell || !script) { hard(); return; }
 
     const swap = () => {
       controller.abort();
@@ -156,9 +169,10 @@
       }
       document.querySelector('.shell').replaceWith(document.importNode(shell, true));
       const s = document.createElement('script');
+      s.roshSignal = controller.signal;
       s.src = script.getAttribute('src');
-      s.onload = () => { s.remove(); afterRender(url, y); };
-      s.onerror = () => { location.href = url.href; };
+      s.onload = () => { s.remove(); if (ticket === navigating) afterRender(url, y); };
+      s.onerror = () => { if (ticket === navigating) hard(); };
       document.body.appendChild(s);
     };
     const vt = document.startViewTransition && !window.RoshUI?.reduceMotion?.();

@@ -392,6 +392,44 @@ for (const mode of ['slow', 'down']) {
   await c3.close();
 }
 
+/* ---------- עדכון בכוח (app-update.js) לא קוטע האזנה ----------
+   פריסה חדשה: version.json שונה מה־?v= של הדף. הנגן (new Audio()) לא נמצא ב־DOM ו־body.is-playing
+   יורד בזמן טעינת ההקלטה — ובכל זאת אסור לטעון את הדף כשלוחצים ▶ וההקלטה עוד נטענת, וגם לא כשיש
+   טקסט שנכתב ועוד לא נשלח. כשהניגון נעצר — העדכון נטען. */
+{
+  const uctx = await browser.newContext({ locale: 'he-IL', viewport: { width: 1200, height: 900 }, ignoreHTTPSErrors: !!process.env.HTTPS_PROXY });
+  await uctx.addInitScript(() => { HTMLDialogElement.prototype.showModal = function () {}; });   // בלי הצעת ההתחברות (חלון פתוח מחזיק את העדכון)
+  await uctx.route('**/api/program/stream/**', () => { /* לא עונים: ההקלטה נשארת בטעינה */ });
+  await uctx.route('**/media/**', () => {});
+  let deployed = 'old';   // הגרסה "עולה" רק אחרי שהדף נטען
+  await uctx.route(/\/version\.json(\?|$)/, (route) => route.fulfill({ status: 200, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ v: deployed }) }));
+  await uctx.route(/\/index\.html(\?|$)/, async (route) => {
+    const r = await route.fetch();
+    route.fulfill({ response: r, body: (await r.text()).replace('assets/js/app-update.js"', 'assets/js/app-update.js?v=old"') });
+  });
+  const p = await uctx.newPage();
+  let loads = 0;
+  p.on('domcontentloaded', () => loads++);
+  await p.goto(`${BASE}/index.html`);
+  await p.waitForSelector('#featured [data-play]');
+  await p.waitForTimeout(500);
+  await p.evaluate(() => { const ta = document.createElement('textarea'); ta.id = 't-unsent'; document.getElementById('main').appendChild(ta); });
+  await p.fill('#t-unsent', 'הודעה שעוד לא נשלחה');
+  deployed = 'new';
+  await p.evaluate(() => { document.activeElement?.blur?.(); window.RoshAppUpdate.check(); });
+  await p.waitForTimeout(4000);
+  check(loads === 1, 'עדכון בכוח לא טוען את הדף כשיש טקסט שלא נשלח (גם כשהפוקוס כבר לא בתיבה)');
+  await p.evaluate(() => document.getElementById('t-unsent').remove());
+  await p.click('#featured [data-play]');
+  await p.waitForSelector('.dock.open');
+  await p.waitForTimeout(4000);
+  check(loads === 1 && (await p.locator('.dock.open').count()) === 1, 'עדכון בכוח לא טוען את הדף בזמן שההקלטה נטענת (הנגן מחוץ ל־DOM)');
+  await p.evaluate(() => window.RoshPlayer.pause());
+  for (let i = 0; i < 40 && loads < 2; i++) await p.waitForTimeout(250);
+  check(loads === 2, 'כשהניגון נעצר — העדכון נטען');
+  await uctx.close();
+}
+
 /* ---------- סיכום ---------- */
 // ה־Worker מאשר CORS רק ל־origin של האתר הפרוס, ולכן מול שרת מקומי הקטלוג נופל
 // לעותק שבמאגר (זה מה שהבדיקה בודקת) — שגיאת ה־CORS הזו אינה תקלה באתר.

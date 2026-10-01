@@ -2,7 +2,7 @@
    נתוני התוכניות נטענים תמיד מהרשת קודם (ונופלים למטמון אם אין), וההקלטות
    עצמן לא נשמרות. עיצוב וסקריפטים עם חותמת גרסה (?v=) נטענים מהמכשיר מיד. ניווט שנכשל ואין לו עותק שמור מקבל את offline.html.
    הגופנים של Google נשמרים במטמון נפרד (שורד החלפת גרסה) כדי שהאתר ייראה נכון גם בלי רשת. */
-const VERSION = 'rosh-v24-autoupdate';
+const VERSION = 'rosh-v25-offline-inplace';
 const FONTS = 'rosh-fonts-v1';
 const ASSETS = 'rosh-assets-v1';   // קבצים עם חותמת גרסה (שורד החלפת גרסה; כל קובץ נשמר בגרסה האחרונה בלבד)
 const OFFLINE = './offline.html';
@@ -97,10 +97,13 @@ self.addEventListener('fetch', (e) => {
     const hit = await caches.match(req, { ignoreSearch: true });
     if (hit) return hit;
     if (navigate) {
-      // דף בתיקייה אחרת (episodes/…): הכתובות היחסיות של offline.html לא יעבדו שם — מפנים אליו
-      const off = new URL(OFFLINE, self.registration.scope).href;
-      if (url.pathname.replace(/[^/]*$/, '') !== new URL(self.registration.scope).pathname) return Response.redirect(off, 302);
-      return (await caches.match(OFFLINE)) || Response.error();
+      const off = await caches.match(OFFLINE);
+      if (!off) return Response.error();
+      if (url.pathname.replace(/[^/]*$/, '') === new URL(self.registration.scope).pathname) return off;
+      // דף בתיקייה אחרת (episodes/…): offline.html עם <base> לשורש האתר, בלי להחליף את הכתובת —
+      // כך "ניסיון חוזר" (וחזרת החיבור) טוענים את הדף שביקשו, ולא את offline.html
+      const html = (await off.text()).replace(/<head>/i, `<head>\n  <base href="${self.registration.scope}">`);
+      return new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8' } });
     }
     return Response.error();
   }));
@@ -123,8 +126,9 @@ self.addEventListener('notificationclick', (e) => {
   const target = new URL(e.notification.data?.url || './', self.registration.scope).href;
   e.waitUntil((async () => {
     const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    // חלון עליון של האתר (לא iframe, ולא אזור הניהול — שם אין ניווט בלי טעינה)
-    const mine = wins.filter((w) => w.url.startsWith(self.registration.scope) && w.frameType !== 'nested' && !/\/admin\.html/.test(new URL(w.url).pathname));
+    // חלון עליון של האתר (לא iframe), רק בדף עם router.js — שם יש ניווט בלי טעינה (לא הניהול, עורך המייל או offline.html)
+    const ROUTED = /^(?:(?:index|archive|episode|me|updates|negishut|guest)\.html)?$|^episodes\/[^/]+\.html$/;
+    const mine = wins.filter((w) => w.url.startsWith(self.registration.scope) && w.frameType !== 'nested' && ROUTED.test(new URL(w.url).pathname.slice(new URL(self.registration.scope).pathname.length)));
     const here = mine.find((w) => w.focused) || mine.find((w) => w.visibilityState === 'visible') || mine[0];
     if (here) {
       try { await here.focus(); } catch { /* הדפדפן לא תמיד מרשה — ההודעה עדיין עוברת */ }

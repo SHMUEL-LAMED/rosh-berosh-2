@@ -34,6 +34,11 @@ if (!process.env.STREAM) {
     return route.fulfill({ status: m ? 206 : 200, headers: { 'access-control-allow-origin': '*', 'accept-ranges': 'bytes', 'content-type': 'audio/wav', ...(m ? { 'content-range': `bytes ${start}-${end}/${wav.length}` } : {}) }, body: wav.subarray(start, end + 1) });
   });
 }
+// שירות Google חיצוני מדומה, כמו שרת האימות המדומה בבדיקות האלה.
+await ctx.route('https://accounts.google.com/gsi/client', (route) => route.fulfill({
+  contentType: 'application/javascript',
+  body: 'window.google = { accounts: { id: { initialize() {}, prompt() {}, renderButton(el) { const b = document.createElement("button"); b.textContent = "התחברות עם Google"; el.appendChild(b); } } } };',
+}));
 const page = await ctx.newPage();
 // כמו מבקר שבוחר להמשיך בלי להתחבר, סוגרים את ההצעה לפני פעולות בדף.
 await page.addLocatorHandler(page.locator('#login-welcome[open]'), async () => {
@@ -205,7 +210,7 @@ await page.click('#episode [data-play]');
 await page.waitForSelector('.dock.open');
 await page.click('.site-nav .me-link');
 await page.waitForSelector('#me-profile .profile-hero');
-check((await page.locator('[data-login]').count()) === 1, 'האזור האישי מציע התחברות');
+check((await page.locator('[data-google]').count()) === 1, 'האזור האישי מציע התחברות');
 check((await page.locator('#me-profile a[href="admin.html"]').count()) === 0, 'בלי כפתור ניהול למי שלא מחובר');
 check((await page.locator('#me-history .row').count()) >= 1, 'בביקור הנוכחי: ההיסטוריה מציגה את מה שנוגן');
 check(!(await page.evaluate(() => Object.keys(localStorage).some((k) => /^rosh:(later|pos:|history|prefs|last)/.test(k)))), 'בלי התחברות שום נתון אישי לא נשמר במכשיר');

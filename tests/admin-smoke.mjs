@@ -91,6 +91,11 @@ await ctx.route(`${API}/**`, async (route) => {
 });
 await ctx.route('https://accounts.google.com/**', (route) => route.abort());
 await ctx.route('https://fonts.googleapis.com/**', (route) => route.fulfill({ status: 200, contentType: 'text/css', body: '' }));
+// שירות Google חיצוני מדומה, כמו שרת האימות המדומה בבדיקות האלה.
+await ctx.route('https://accounts.google.com/gsi/client', (route) => route.fulfill({
+  contentType: 'application/javascript',
+  body: 'window.google = { accounts: { id: { initialize() {}, prompt() {}, renderButton(el) { const b = document.createElement("button"); b.textContent = "התחברות עם Google"; el.appendChild(b); } } } };',
+}));
 const page = await ctx.newPage();
 // כמו מבקר שבוחר להמשיך בלי להתחבר, סוגרים את ההצעה לפני פעולות בדף.
 await page.addLocatorHandler(page.locator('#login-welcome[open]'), async () => {

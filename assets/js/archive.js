@@ -38,6 +38,8 @@
 
   const seasons = S.seasons();
   const all = S.episodes();
+  // הדף צויר מהעותק השמור, והקטלוג החדש שהגיע אחריו שונה ממנו — מציירים את הדף מחדש (הנגן ממשיך)
+  window.addEventListener('rosh:catalog', () => window.RoshApp?.navigate(location.href, { push: false, y: window.scrollY }), on);
   /** אותו אורח גם כשהשם נכתב עם רווחים או ניקוד אחרים */
   const guestKey = (name) => String(name || '').replace(/[\u0591-\u05C7]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
   /** כל מי שהיה בתוכניות — מגישים, אורחים וחברי פאנל: השם הנפוץ ביותר לכל אחד, וכמה תוכניות — מהרבות למעטות */
@@ -101,9 +103,10 @@ ${guests.length ? `<label class="visually-hidden" for="guest">מגיש או או
     // "עם מי": מגיש, אורח או חבר פאנל — השמות בדפי התוכניות מובילים לכאן
     if (state.guest) { const k = guestKey(state.guest); list = list.filter((e) => [...e.hosts, ...e.guests, ...e.panelists].some((g) => guestKey(g) === k)); }
     list = S.searchEpisodes(state.q, list);
+    const d = S.sortDates(all);   // תוכנית בלי תאריך — לפי השכנות שלה במספר (כמו בשאר האתר)
     const by = {
-      new: (a, b) => (b.date || '').localeCompare(a.date || '') || (b.number || 0) - (a.number || 0),
-      old: (a, b) => (a.date || '').localeCompare(b.date || '') || (a.number || 0) - (b.number || 0),
+      new: (a, b) => d.get(b).localeCompare(d.get(a)) || (b.number || 0) - (a.number || 0),
+      old: (a, b) => d.get(a).localeCompare(d.get(b)) || (a.number || 0) - (b.number || 0),
       num: (a, b) => (b.number || 0) - (a.number || 0),
       long: (a, b) => (b.duration || 0) - (a.duration || 0),
     }[state.sort] || (() => 0);

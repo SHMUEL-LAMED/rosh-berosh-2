@@ -45,6 +45,19 @@
   }
   const n2 = (n) => Number(n || 0).toLocaleString('he-IL');
 
+  /* הבחירה שממתינה לכניסה: הכניסה עם Google עוברת לרגע דרך אתר הסקר וחוזרת — הדף נטען מחדש,
+     ולכן הבחירה נשמרת ללשונית הזו (sessionStorage, עד 10 דקות) ונשלחת לבד כשחוזרים מחוברים */
+  const PENDING = 'rosh:poll-pending';
+  const savePending = (id, sel) => { try { sessionStorage.setItem(PENDING, JSON.stringify({ id, choices: [...sel], at: Date.now() })); } catch { /* */ } };
+  const takePending = (id) => {
+    try {
+      const v = JSON.parse(sessionStorage.getItem(PENDING) || 'null');
+      if (!v || v.id !== id) return null;
+      sessionStorage.removeItem(PENDING);
+      return Date.now() - v.at < 600000 && Array.isArray(v.choices) ? v.choices : null;
+    } catch { return null; }
+  };
+
   /* ---------- ציור ---------- */
 
   /** st — המצב מהשרת (או null בזמן טעינה); ui — מה המאזין עושה עכשיו בסקר */
@@ -123,7 +136,7 @@
     const mountLogin = () => {
       const g = slot.querySelector('[data-poll-google]'); if (!g || g.dataset.on) return;
       g.dataset.on = '1';
-      S.sb.google(g, { onDone: () => { c.ui.login = false; c.vote(); }, onError: (err) => U.notify(`ההתחברות לא הצליחה: ${err.message}`, 'error') })
+      S.sb.google(g, { onDone: () => { c.ui.login = false; c.vote(); }, onLeave: () => savePending(p.id, c.ui.selected), onError: (err) => U.notify(`ההתחברות לא הצליחה: ${err.message}`, 'error') })
         .catch((err) => { g.innerHTML = `<span class="cue-hint">${esc(err.message)}</span>`; });
     };
     c.pick = (id) => {
@@ -145,7 +158,7 @@
       c.ui.busy = true; c.ui.error = ''; c.paint();
       try {
         const r = await S.sb.polls.vote(p.id, [...c.ui.selected]);
-        c.st = r.poll; c.ui.changing = false; c.ui.justVoted = true;
+        c.st = r.poll; c.ui.changing = false; c.ui.justVoted = true; takePending(p.id);
         U.notify('ההצבעה נקלטה. תודה!', 'success');
       } catch (err) {
         if (err.status === 401) { S.forgetSession?.(); c.ui.login = true; }
@@ -164,6 +177,10 @@
         if (!c.st) { slot.hidden = true; return; }
         slot.hidden = false;
         if (c.st.mine?.length && !c.ui.selected.size) c.ui.selected = new Set(c.st.mine);
+        // חזרנו מחוברים מהכניסה עם Google: ההצבעה שחיכתה נשלחת עכשיו
+        const pending = S.sb.user && c.st.open && !c.st.mine?.length ? takePending(p.id) : null;
+        const ids = (pending || []).filter((id) => options(p).some((o) => o.id === id)).slice(0, p.multi ? p.maxChoices : 1);
+        if (ids.length) { c.ui.selected = new Set(ids); c.ui.login = false; c.paint(); c.vote(); return; }
       } catch (err) {
         // השרת עוד לא מכיר סקרים — לא מציגים סקר שאי אפשר להצביע בו
         if (err.status === 404) { slot.hidden = true; return; }

@@ -431,6 +431,34 @@ for (const mode of ['slow', 'down']) {
   await uctx.close();
 }
 
+
+/* ---------- טלפון עם מגע: רוחב, ניווט ופקדי נגן ---------- */
+{
+  const mobile = await browser.newContext({ locale: 'he-IL', isMobile: true, hasTouch: true, viewport: { width: 320, height: 740 } });
+  const mp = await mobile.newPage();
+  await mp.addLocatorHandler(mp.locator('#login-welcome[open]'), async () => {
+    await mp.locator('#login-welcome .welcome-later[data-dismiss]').click();
+  });
+  for (const width of [320, 360, 390, 430]) {
+    await mp.setViewportSize({ width, height: 740 });
+    for (const path of ['index.html', 'archive.html', 'updates.html', 'me.html']) {
+      await mp.goto(BASE + '/' + path);
+      await mp.waitForSelector('.site-header');
+      check(await mp.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'אין גלילה אופקית בטלפון: ' + path + ' / ' + width);
+    }
+    await mp.goto(BASE + '/index.html');
+    await mp.waitForSelector('#featured [data-play]');
+    await mp.locator('#featured [data-play]').click();
+    await mp.waitForSelector('.dock.open');
+    const targets = await mp.locator('.dock-controls button, .dock-controls select').evaluateAll(els => els.map(el => {
+      const r = el.getBoundingClientRect(); return { w: r.width, h: r.height, x: r.left, right: r.right };
+    }));
+    check(targets.every(r => r.w >= 44 && r.h >= 44 && r.x >= -1 && r.right <= width + 1), 'כפתורי הנגן נגישים למגע ונכנסים למסך / ' + width);
+    await mp.locator('.dock [data-close]').click();
+  }
+  await mobile.close();
+}
+
 /* ---------- סיכום ---------- */
 // ה־Worker מאשר CORS רק ל־origin של האתר הפרוס, ולכן מול שרת מקומי הקטלוג נופל
 // לעותק שבמאגר (זה מה שהבדיקה בודקת) — שגיאת ה־CORS הזו אינה תקלה באתר.

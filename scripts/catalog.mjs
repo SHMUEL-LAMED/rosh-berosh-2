@@ -14,10 +14,14 @@ export async function loadCatalog() {
   const api = site.storage?.cloudflare?.apiBase;
   let catalog = null;
   if (api) {
-    try {
-      const r = await fetch(`${api.replace(/\/$/, '')}/api/program/catalog`, { signal: AbortSignal.timeout(20000) });
-      if (r.ok) catalog = await r.json();
-    } catch (err) { console.warn(`catalog fetch failed: ${err.message}`); }
+    // שרת הקטלוג עשוי להתעורר לאט; מנסים שוב לפני שעוצרים פריסה.
+    for (let attempt = 1; attempt <= 3 && !catalog?.episodes?.length; attempt++) {
+      try {
+        const r = await fetch(`${api.replace(/\/$/, '')}/api/program/catalog`, { signal: AbortSignal.timeout(60000) });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        catalog = await r.json();
+      } catch (err) { console.warn(`catalog fetch attempt ${attempt} failed: ${err.message}`); }
+    }
   }
   fromLive = !!catalog?.episodes?.length;
   if (!fromLive) {

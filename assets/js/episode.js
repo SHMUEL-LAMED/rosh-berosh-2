@@ -236,7 +236,7 @@ ${u ? `<form class="comment-form" data-comment-form>
     ${stream ? `<label class="check"><input type="checkbox" name="moment" ${playingHere ? 'checked' : ''} ${Pl.isCurrent(ep.id) ? '' : 'disabled'}> <span data-moment-label>${Pl.isCurrent(ep.id) ? `על הרגע הזה בתוכנית (${fmtTime(Pl.time)})` : 'על רגע מסוים — התחילו להאזין כדי לבחור רגע'}</span></label>` : ''}
     <button type="submit" class="btn primary">פרסום התגובה <span>←</span></button>
   </div>
-  <p class="cue-hint">התגובה תופיע אחרי שהמגישים יאשרו אותה, בשם ${esc(String(u.name || '').split(' ')[0] || 'מאזין')}.</p>
+  <p class="cue-hint">התגובה תופיע אחרי שהמגישים יאשרו אותה, בשם ${esc(String(u.name || '').trim() || 'מאזין')}.</p>
 </form>` : `<div class="comment-login"><p>כדי להגיב צריך להתחבר עם Google — כך התגובות נשארות נקיות ומכבדות.</p><a class="btn" href="me.html">להתחברות <span>←</span></a></div>`}
 ${mine.length ? `<ul class="comment-list mine">${mine.map((c) => commentHtml(c, true)).join('')}</ul>` : ''}
 ${comments.length ? `<ul class="comment-list">${comments.map((c) => commentHtml(c)).join('')}</ul>` : '<p class="cue-hint">עדיין אין תגובות. היו הראשונים.</p>'}`;

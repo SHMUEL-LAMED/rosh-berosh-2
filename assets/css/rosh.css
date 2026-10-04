@@ -1370,10 +1370,16 @@ dialog.sheet .card-body { padding: 18px 22px 22px; }
   .footer-mark { margin: 0 0 -14px; }
 }
 @media (max-width: 430px) { #filters:empty { min-height: 130px; } }
-/* טלפון צר מאוד: פקדים מעט קטנים יותר כדי שכל השורה תיכנס */
-@media (max-width: 359px) {
-  .dock-controls .dock-btn { width: 34px; min-width: 34px; }
-  .dock-speed { width: 42px; }
+/* בטלפון צר שומרים על מטרות מגע גדולות ומעבירים את הפקדים לשתי שורות. */
+@media (max-width: 430px) {
+  .dock-controls { display: grid; grid-template-columns: repeat(5, minmax(44px, 1fr)); gap: 6px; justify-items: center; }
+  .dock-controls .dock-btn { width: 44px; min-width: 44px; height: 44px; }
+  .dock-controls .dock-speed { order: 1; grid-column: span 2; width: 100%; min-width: 44px; min-height: 44px; }
+  .dock-controls .moment-btn { order: 1; }
+  body.has-dock { --dock-height: 200px; }
+}
+@media (pointer: coarse) {
+  .dock-extra .dock-btn, .site-nav a, .site-nav button { min-width: 44px; min-height: 44px; }
 }
 /* פחות תנועה: לפי המערכת (אלא אם המשתמש בחר "תנועה מלאה"), או לפי בחירה באתר (data-motion="reduced").
    שני הבלוקים זהים: לעדכן יחד. */

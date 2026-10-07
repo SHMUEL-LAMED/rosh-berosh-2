@@ -71,6 +71,9 @@ const page = await ctx.newPage();
 await page.addLocatorHandler(page.locator('#login-welcome[open]'), async () => {
   await page.locator('#login-welcome .welcome-later[data-dismiss]').click();
 });
+await page.addLocatorHandler(page.locator('#account-chooser[open]'), async () => {
+  await page.locator('#account-chooser [data-cancel]').click();
+});
 page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
 page.on('dialog', (d) => d.accept());
 const signIn = (who) => page.evaluate((u) => { localStorage.setItem('rosh:cf:session', JSON.stringify({ token: u.token, user: u.user })); localStorage.setItem('rosh:admin:guided', '1'); }, { token: who, user: users[who] });

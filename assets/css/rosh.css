@@ -1294,6 +1294,51 @@ dialog.sheet .card-body { padding: 18px 22px 22px; }
 .kbd-list { display: grid; grid-template-columns: auto 1fr; gap: 10px 16px; align-items: center; font-size: 14px; }
 .kbd-list kbd { justify-self: start; padding: 4px 10px; border: 1px solid var(--border-strong); border-bottom-width: 3px; border-radius: 8px; background: var(--kbd-bg); font: 700 12px var(--mono); direction: ltr; }
 
+/* ---------- חלון בחירת חשבון (RoshUI.accountChooser) ----------
+   החלון של Google — "כניסה אל האתר באמצעות google.com", "בחירת חשבון להמשך", רשימת החשבונות
+   ושני כפתורים — בתוך האתר. לבן תמיד, גם בתמה הכהה: זה משטח של Google ולא של האתר, כמו
+   החלון שהדפדפן עצמו מציג. */
+dialog.account-chooser {
+  box-sizing: border-box; width: min(560px, calc(100% - 32px)); max-height: calc(100dvh - 32px); margin: auto;
+  padding: 22px 28px 22px; border: 0; border-radius: 20px; overflow: auto;
+  background: #fff; color: #1f1f1f; box-shadow: 0 24px 80px rgba(0, 0, 0, .45);
+  font-family: var(--sans); text-align: right; animation: sheet-in .35s var(--ease); color-scheme: light;
+}
+dialog.account-chooser::backdrop { background: var(--backdrop); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+.chooser-art { display: grid; place-items: center; margin: 0 0 8px; }
+.chooser-art svg { display: block; width: 320px; max-width: 100%; height: auto; }
+dialog.account-chooser h2 { margin: 0; font-family: var(--sans); font-size: 22px; font-weight: 700; line-height: 1.35; color: #1f1f1f; overflow-wrap: anywhere; }
+.chooser-sub { margin: 6px 0 16px; font-size: 15px; color: #5e5e5e; }
+.chooser-list { list-style: none; margin: 0 -28px; padding: 0; border-top: 1px solid #e3e3e3; border-bottom: 1px solid #e3e3e3; }
+.chooser-list li + li { border-top: 1px solid #e3e3e3; }
+.chooser-account {
+  display: flex; align-items: center; gap: 16px; width: 100%; min-height: 68px; padding: 10px 28px;
+  border: 0; border-radius: 0; background: none; color: inherit; font: inherit; text-align: right; cursor: pointer;
+}
+.chooser-account:hover { background: #f2f2f2; }
+.chooser-account:focus-visible { outline: 2px solid #0b57d0; outline-offset: -2px; background: #f2f2f2; }
+.chooser-avatar { width: 44px; height: 44px; flex: none; display: grid; place-items: center; border-radius: 50%; object-fit: cover; background: #7b1fa2; color: #fff; font-size: 20px; font-weight: 800; }
+.chooser-who { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.chooser-who b { font-size: 15px; font-weight: 700; color: #1f1f1f; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chooser-who small { font-size: 13px; color: #5e5e5e; direction: ltr; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chooser-go { width: 18px; height: 18px; flex: none; color: #444746; }
+.chooser-picked { display: grid; gap: 12px; justify-items: start; padding: 14px 0 4px; border-top: 1px solid #e3e3e3; }
+.chooser-status { display: grid; gap: 2px; margin: 0; font-size: 15px; color: #1f1f1f; }
+.chooser-status small { font-size: 13px; color: #5e5e5e; direction: ltr; text-align: right; }
+.chooser-hint { margin: 0; min-height: 1em; font-size: 13px; color: #5e5e5e; }
+.chooser-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; margin-top: 22px; }
+.chooser-btn { flex: 1 1 auto; min-height: 40px; padding: 8px 22px; border: 1px solid #747775; border-radius: 999px; background: #fff; color: #1f1f1f; font: 700 14px var(--sans); cursor: pointer; }
+.chooser-btn:hover { background: #f2f2f2; }
+.chooser-btn:focus-visible { outline: 3px solid #0b57d0; outline-offset: 2px; }
+@media (min-width: 481px) { .chooser-btn { flex: 0 0 auto; } }
+@media (max-width: 480px) {
+  dialog.account-chooser { padding: 16px 20px 18px; border-radius: 18px; }
+  dialog.account-chooser h2 { font-size: 19px; }
+  .chooser-list { margin-inline: -20px; }
+  .chooser-account { padding-inline: 20px; }
+}
+@media (prefers-reduced-motion: reduce) { dialog.account-chooser { animation: none; } }
+
 /* ---------- תנועה: גילוי בגלילה ---------- */
 
 [data-reveal] { opacity: 0; transform: translateY(26px); transition: opacity .8s var(--ease), transform .8s var(--ease); transition-delay: calc(var(--i, 0) * 70ms); }

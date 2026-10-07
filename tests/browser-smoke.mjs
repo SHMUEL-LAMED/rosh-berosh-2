@@ -38,7 +38,8 @@ if (!process.env.STREAM) {
 // שירות Google חיצוני מדומה, כמו שרת האימות המדומה בבדיקות האלה.
 await ctx.route('https://accounts.google.com/gsi/client', (route) => route.fulfill({
   contentType: 'application/javascript',
-  body: 'window.google = { accounts: { id: { initialize() {}, prompt() {}, renderButton(el) { const b = document.createElement("button"); b.textContent = "התחברות עם Google"; el.appendChild(b); } } } };',
+  // הספרייה המדומה רושמת מה האתר העביר לה (window.__gsi): ההגדרה האחרונה וכמה פעמים נפתחה ההצעה
+  body: 'window.google = { accounts: { id: { initialize(o) { (window.__gsi ||= {}).init = o; }, prompt() { (window.__gsi ||= {}).prompted = (window.__gsi.prompted || 0) + 1; }, renderButton(el) { const b = document.createElement("button"); b.textContent = "התחברות עם Google"; el.appendChild(b); } } } };',
 }));
 const page = await ctx.newPage();
 // כמו מבקר שבוחר להמשיך בלי להתחבר, סוגרים את ההצעה לפני פעולות בדף.
@@ -266,6 +267,40 @@ await page.waitForSelector('#me-profile .profile-hero');
 check((await page.locator('.site-nav .admin-link').count()) === 0, 'מאזין רגיל מחובר לא רואה ניהול');
 check((await page.locator('#me-profile h1').innerText()).includes('מאזין'), 'האזור האישי מברך בשם');
 await page.evaluate(() => localStorage.removeItem('rosh:cf:session'));
+
+/* ---------- חלון בחירת חשבון: מי שכבר נכנס מהמכשיר הזה ---------- */
+// כניסה (הסשן נקבע דרך החנות, כמו אחרי אישור של Google) זוכרת את החשבון במכשיר — שם וכתובת, בלי טוקן
+await page.evaluate(() => { window.RoshStore.sb.session = { token: 'test', user: { email: 'Returning@Example.com', name: 'מאזין חוזר', picture: '', isAdmin: false } }; window.RoshStore.sb.session = null; });
+const known = await page.evaluate(() => JSON.parse(localStorage.getItem('rosh:known-accounts') || '[]'));
+check(known.length === 1 && known[0].email === 'returning@example.com' && known[0].name === 'מאזין חוזר' && !('token' in known[0]), 'כניסה זוכרת את החשבון במכשיר (שם וכתובת בלבד, בלי טוקן), גם אחרי התנתקות');
+await page.reload();
+await page.waitForSelector('#account-chooser[open]');
+check(!(await page.locator('#login-welcome').count()), 'למי שכבר נכנס מכאן נפתח חלון בחירת החשבון במקום הצעת ההיכרות');
+check((await page.locator('#account-chooser h2').innerText()).replace(/\s+/g, ' ').trim() === `כניסה אל ${new URL(BASE).host} באמצעות google.com`, 'כותרת החלון: כניסה אל האתר באמצעות google.com');
+check((await page.locator('#account-chooser .chooser-sub').innerText()).trim() === 'בחירת חשבון להמשך', 'הכותרת המשנית: בחירת חשבון להמשך');
+const row = page.locator('#account-chooser .chooser-account');
+check((await row.count()) === 1 && (await row.innerText()).includes('מאזין חוזר') && (await row.innerText()).includes('returning@example.com'), 'החשבון מוצג עם שם וכתובת');
+check((await page.locator('#account-chooser .chooser-avatar').innerText()).trim() === 'מ', 'בלי תמונה — עיגול עם האות הראשונה של השם');
+check((await page.locator('#account-chooser [data-other]').innerText()).trim() === 'שימוש בחשבון אחר' && (await page.locator('#account-chooser [data-cancel]').innerText()).trim() === 'ביטול', 'שני הכפתורים: "שימוש בחשבון אחר" ו"ביטול"');
+check(await page.evaluate(() => getComputedStyle(document.getElementById('account-chooser')).backgroundColor === 'rgb(255, 255, 255)'), 'החלון לבן, כמו החלון של Google, גם בתמה הכהה');
+await row.click();
+await page.waitForSelector('#account-chooser [data-chooser-google] button');
+check((await page.evaluate(() => window.__gsi?.init?.login_hint)) === 'returning@example.com', 'בחירת חשבון מעבירה אותו ל־Google (login_hint)');
+check((await page.evaluate(() => window.__gsi?.prompted)) >= 1, 'ההצעה של Google נפתחת מיד לחשבון שנבחר');
+check((await page.locator('#account-chooser [data-chooser-status]').innerText()).includes('מאזין חוזר'), 'החלון מראה עם איזה חשבון ממשיכים, וכפתור Google כגיבוי');
+await page.click('#account-chooser [data-other]');   // חזרה לבחירת חשבון
+check(await page.locator('#account-chooser .chooser-account').isVisible(), '"חזרה לבחירת חשבון" מחזירה את הרשימה');
+await page.click('#account-chooser [data-other]');   // שימוש בחשבון אחר
+await page.waitForSelector('#account-chooser [data-chooser-google] button');
+check((await page.evaluate(() => window.__gsi?.init?.login_hint)) === undefined, '"שימוש בחשבון אחר" — כפתור Google בלי רמז לחשבון');
+await page.click('#account-chooser [data-cancel]');
+await page.waitForSelector('#account-chooser', { state: 'detached' });
+check((await page.locator('[data-google]').count()) === 1, '"ביטול" סוגר את החלון, והדף מציע התחברות כרגיל');
+// עד שלושה חשבונות, האחרון שנכנס ראשון; כניסה חוזרת של אותו חשבון רק מעלה אותו לראש
+await page.evaluate(() => { for (const n of [1, 2, 3, 4, 2]) window.RoshStore.sb.session = { token: 't', user: { email: `a${n}@example.com`, name: `חשבון ${n}` } }; window.RoshStore.sb.session = null; });
+check((await page.evaluate(() => window.RoshStore.sb.knownAccounts().map((a) => a.email).join(' '))) === 'a2@example.com a4@example.com a3@example.com', 'עד שלושה חשבונות, האחרון שנכנס ראשון, בלי כפילויות');
+await page.evaluate(() => { window.RoshStore.sb.forgetAccounts(); });
+check(!(await page.evaluate(() => localStorage.getItem('rosh:known-accounts'))), 'שכחת החשבונות מוחקת אותם מהמכשיר');
 
 /* ---------- ניהול: השער ---------- */
 await page.goto(`${BASE}/admin.html?standalone=1`);   // בלי standalone הדף עובר לניהול המשותף באתר הסקר

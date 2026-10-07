@@ -96,6 +96,9 @@ await page.addLocatorHandler(page.locator('#login-welcome[open]'), async () => {
   await page.locator('#login-welcome .welcome-later[data-dismiss]').click();
 
 });
+await page.addLocatorHandler(page.locator('#account-chooser[open]'), async () => {
+  await page.locator('#account-chooser [data-cancel]').click();
+});
 const errors = [];
 page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
 page.on('console', (msg) => { if (msg.type() === 'error') errors.push(`console: ${msg.text()}`); });

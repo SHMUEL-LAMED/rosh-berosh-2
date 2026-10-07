@@ -779,6 +779,98 @@
   });
 
 
+  /* ---------- חלון בחירת חשבון ----------
+     החלון של Google ("כניסה אל האתר באמצעות google.com — בחירת חשבון להמשך"), בתוך האתר:
+     החשבונות שכבר נכנסו מהמכשיר הזה (RoshStore.sb.knownAccounts), תמונה, שם וכתובת, ושני
+     כפתורים — "שימוש בחשבון אחר" ו"ביטול". בחירת חשבון מעבירה אותו ל־Google כ־login_hint:
+     ההצעה של Google (prompt) נפתחת מיד לאותו חשבון, וכפתור Google שמוצג בחלון הוא הגיבוי
+     כשההצעה לא מוצגת (אין חשבון Google פתוח בדפדפן, או שההצעה הושתקה). "שימוש בחשבון אחר"
+     מציג את כפתור Google הרגיל בתוך החלון. מחזיר את הדיאלוג, או null כשאין חשבונות. */
+  const GOOGLE_G = '<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>';
+  // האיור שבראש החלון: תג עגול עם הלוגו, ונקודות משני צדדיו
+  const CHOOSER_ART = `<svg viewBox="0 0 320 104" aria-hidden="true" focusable="false">
+<g fill="none" stroke="#c4c7c5" stroke-width="3" stroke-linecap="round" stroke-dasharray="0.1 7">
+  <path d="M18 36h40"/><path d="M34 54h60"/><path d="M58 74h30"/><path d="M262 36h40"/><path d="M226 54h60"/><path d="M232 74h30"/>
+</g>
+<g fill="#c4c7c5"><circle cx="100" cy="24" r="3"/><circle cx="76" cy="92" r="2.5"/><circle cx="220" cy="24" r="3"/><circle cx="244" cy="92" r="2.5"/><circle cx="112" cy="82" r="2"/><circle cx="208" cy="82" r="2"/></g>
+<circle cx="160" cy="52" r="44" fill="#fff" stroke="#e3e3e3" stroke-width="7" stroke-dasharray="7 5"/>
+<circle cx="160" cy="52" r="40" fill="#fff"/>
+<g transform="translate(140 32) scale(.8333)">${GOOGLE_G.replace('<svg viewBox="0 0 48 48" aria-hidden="true">', '').replace('</svg>', '')}</g>
+</svg>`;
+  const CHOOSER_GO = '<svg class="chooser-go" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M15.5 5 7.5 12l8 7z"/></svg>';
+  const AVATAR_COLORS = ['#7b1fa2', '#1e88e5', '#43a047', '#e53935', '#fb8c00', '#00897b'];
+  function chooserAvatar(a) {
+    if (a.picture) return `<img class="chooser-avatar" src="${esc(a.picture)}" alt="" referrerpolicy="no-referrer">`;
+    const letter = (a.name || a.email).trim().slice(0, 1).toUpperCase() || '?';
+    const color = AVATAR_COLORS[[...a.email].reduce((n, c) => n + c.charCodeAt(0), 0) % AVATAR_COLORS.length];
+    return `<span class="chooser-avatar" style="background:${color}" aria-hidden="true">${esc(letter)}</span>`;
+  }
+  function accountChooser({ onDone, onError, onCancel } = {}) {
+    const S = window.RoshStore;
+    const accounts = S?.sb?.configured ? S.sb.knownAccounts() : [];
+    if (!accounts.length) return null;
+    document.getElementById('account-chooser')?.remove();
+    const d = document.createElement('dialog');
+    d.id = 'account-chooser'; d.className = 'account-chooser';
+    d.setAttribute('aria-labelledby', 'account-chooser-title');
+    d.innerHTML = `
+<div class="chooser-art">${CHOOSER_ART}</div>
+<h2 id="account-chooser-title">כניסה אל <span dir="ltr">${esc(location.host)}</span> באמצעות google.com</h2>
+<p class="chooser-sub" data-chooser-sub>בחירת חשבון להמשך</p>
+<ul class="chooser-list" data-chooser-list>${accounts.map((a) => `
+  <li><button type="button" class="chooser-account" data-email="${esc(a.email)}">${chooserAvatar(a)}<span class="chooser-who"><b>${esc(a.name || a.email.split('@')[0])}</b><small dir="ltr">${esc(a.email)}</small></span>${CHOOSER_GO}</button></li>`).join('')}
+</ul>
+<div class="chooser-picked" data-chooser-picked hidden>
+  <p class="chooser-status" data-chooser-status role="status"></p>
+  <div class="google-slot" data-chooser-google></div>
+  <p class="chooser-hint" data-chooser-hint></p>
+</div>
+<div class="chooser-foot">
+  <button type="button" class="chooser-btn" data-other>שימוש בחשבון אחר</button>
+  <button type="button" class="chooser-btn" data-cancel>ביטול</button>
+</div>`;
+    document.body.appendChild(d);
+    const q = (sel) => d.querySelector(sel);
+    let off = () => {};
+    const close = () => { if (!d.isConnected) return; d.close(); d.remove(); off(); };
+    off = S.onSession((user) => { if (user) close(); });   // התחברו (גם בדרך אחרת) — החלון סיים את תפקידו
+    const done = (user) => { close(); onDone?.(user); };
+    const failed = (err) => { if (d.isConnected) q('[data-chooser-status]').textContent = `ההתחברות לא הצליחה: ${err.message}`; onError?.(err); };
+    // מציג את כפתור Google בתוך החלון, לחשבון שנבחר (hint) או לכל חשבון
+    const showGoogle = async (account) => {
+      q('[data-chooser-list]').hidden = true;
+      q('[data-chooser-picked]').hidden = false;
+      q('[data-chooser-sub]').textContent = account ? 'ממשיכים עם החשבון שבחרתם' : 'בחירת חשבון Google אחר';
+      q('[data-chooser-status]').innerHTML = account
+        ? `<b>ממשיכים עם ${esc(account.name || account.email)}</b><small dir="ltr">${esc(account.email)}</small>`
+        : 'לחצו על הכפתור ובחרו חשבון ב־Google.';
+      q('[data-chooser-hint]').textContent = account ? 'אם לא נפתח חלון של Google, לחצו על הכפתור.' : '';
+      q('[data-other]').textContent = 'חזרה לבחירת חשבון';
+      q('[data-other]').dataset.back = '1';
+      const slot = q('[data-chooser-google]');
+      try { await S.sb.google(slot, { hint: account?.email || '', oneTap: !!account, onDone: done, onError: failed }); }
+      catch (err) { if (d.isConnected) { slot.innerHTML = `<span class="cue-hint">${esc(err.message)}</span>`; q('[data-chooser-hint]').textContent = ''; } }
+    };
+    const showList = () => {
+      q('[data-chooser-list]').hidden = false;
+      q('[data-chooser-picked]').hidden = true;
+      q('[data-chooser-sub]').textContent = 'בחירת חשבון להמשך';
+      q('[data-other]').textContent = 'שימוש בחשבון אחר';
+      delete q('[data-other]').dataset.back;
+    };
+    d.addEventListener('click', (e) => {
+      if (e.target === d || e.target.closest('[data-cancel]')) { close(); onCancel?.(); return; }
+      const row = e.target.closest('.chooser-account');
+      if (row) { showGoogle(accounts.find((a) => a.email === row.dataset.email)); return; }
+      const other = e.target.closest('[data-other]');
+      if (other) { if (other.dataset.back) showList(); else showGoogle(null); }
+    });
+    d.addEventListener('cancel', (e) => { e.preventDefault(); close(); onCancel?.(); });
+    d.showModal();
+    q('.chooser-account')?.focus();
+    return d;
+  }
+
   /* הצעה להתחבר בכל טעינת אתר, רק למי שעוד לא מחובר. */
   async function offerLogin() {
     const S = window.RoshStore;
@@ -786,6 +878,8 @@
     if (S.sb.user || !S.sb.configured || S.state.embed || S.state.preview || S.state.live || window.top !== window) return;
     if (/(?:admin|mail)\.html$/.test(location.pathname)) return;
     if (document.getElementById('login-welcome')) return;
+    // מי שכבר נכנס מהמכשיר הזה בוחר את החשבון בחלון בחירת החשבון, במקום הצעת ההיכרות
+    if (document.getElementById('account-chooser') || accountChooser({ onError: (e) => notify(`ההתחברות לא הצליחה: ${e.message}`, 'error') })) return;
     const d = document.createElement('dialog');
     d.id = 'login-welcome'; d.className = 'login-welcome';
     d.setAttribute('aria-labelledby', 'login-welcome-title');
@@ -833,5 +927,5 @@
     catch (e) { if (d.isConnected) d.querySelector('[data-login-error]').textContent = 'כפתור Google לא נטען. רעננו את הדף ונסו שוב.'; }
   }
 
-  window.RoshUI = { offerLogin, adminHref, newUpdates, markUpdatesSeen, updateUrl, updateText, updatePlain, updateExtras, fmtSize, banner, messageForm, mountSubscribe, esc, fmtTime, parseTime, fmtDuration, fmtDate, fmtHebDate, fmtWeekday, slugify, qs, header, footer, repaintHeader, actionButtons, paintActions, push, notify, kbdHelp, isTyping, copy, driveId, isDriveUrl, streamUrl, streamCandidates, downloadUrl, shareUrl, publicLinks, coverVars, hue, seasonVars, epCard, reveal, pauseOffscreen, countUp, eqBars, reduceMotion, applyPrefs };
+  window.RoshUI = { offerLogin, accountChooser, adminHref, newUpdates, markUpdatesSeen, updateUrl, updateText, updatePlain, updateExtras, fmtSize, banner, messageForm, mountSubscribe, esc, fmtTime, parseTime, fmtDuration, fmtDate, fmtHebDate, fmtWeekday, slugify, qs, header, footer, repaintHeader, actionButtons, paintActions, push, notify, kbdHelp, isTyping, copy, driveId, isDriveUrl, streamUrl, streamCandidates, downloadUrl, shareUrl, publicLinks, coverVars, hue, seasonVars, epCard, reveal, pauseOffscreen, countUp, eqBars, reduceMotion, applyPrefs };
 })();

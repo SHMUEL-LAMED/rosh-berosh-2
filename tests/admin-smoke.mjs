@@ -121,6 +121,19 @@ await page.waitForTimeout(800);
 check(await page.evaluate(() => document.body.classList.contains('admin-locked')), 'הניהול נעול בלי מנהל מחובר');
 check((await page.locator('#gate-google').count()) === 1, 'השער מציע כניסה ישירה עם Google');
 check((await page.locator('#gate-google button').count()) === 1 && (await page.locator('#gate-login-site').count()) === 0, 'כפתור Google מוצג ללא כניסה חלופית דרך אתר הסקר');
+check(!(await page.locator('#account-chooser').count()), 'בלי חשבון שנכנס מהמכשיר הזה — אין חלון בחירת חשבון');
+// מנהל שכבר נכנס מהמכשיר הזה: חלון בחירת החשבון נפתח מעל השער
+await page.evaluate(() => localStorage.setItem('rosh:known-accounts', JSON.stringify([{ email: 'admin@example.com', name: 'בדיקה', at: 1 }])));
+await page.reload();
+await page.waitForSelector('#account-chooser[open]');
+check((await page.locator('#account-chooser .chooser-account').innerText()).includes('admin@example.com'), 'השער מציע את החשבון שכבר נכנס מהמכשיר הזה בחלון בחירת החשבון');
+await page.evaluate(() => document.querySelector('#account-chooser [data-cancel]').click());
+await page.waitForSelector('#account-chooser', { state: 'detached' });
+check((await page.locator('#gate-google button').count()) === 1, 'אחרי הביטול כפתור Google שבשער נשאר');
+// מכאן: חשבון שנכנס במהלך הבדיקה (קוד מעבר) יפתח את החלון — סוגרים אותו לפני פעולות בדף
+await page.addLocatorHandler(page.locator('#account-chooser[open]'), async () => {
+  await page.locator('#account-chooser [data-cancel]').click();
+});
 
 /* ---------- מנהל מחובר ---------- */
 await page.evaluate(() => {
@@ -512,6 +525,9 @@ check(await page.evaluate(() => document.body.classList.contains('admin-locked')
   await p2.addLocatorHandler(p2.locator('#login-welcome[open]'), async () => {
     await p2.locator('#login-welcome .welcome-later[data-dismiss]').click();
   });
+  await p2.addLocatorHandler(p2.locator('#account-chooser[open]'), async () => {
+    await p2.locator('#account-chooser [data-cancel]').click();
+  });
   p2.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
   await p2.route(`${API}/api/program/stream/**`, (route) => {
     const m = /bytes=(\d+)-(\d*)/.exec(route.request().headers().range || '');
@@ -548,6 +564,9 @@ check(await page.evaluate(() => document.body.classList.contains('admin-locked')
   // כמו מבקר שבוחר להמשיך בלי להתחבר, סוגרים את ההצעה לפני פעולות בדף.
   await p3.addLocatorHandler(p3.locator('#login-welcome[open]'), async () => {
     await p3.locator('#login-welcome .welcome-later[data-dismiss]').click();
+  });
+  await p3.addLocatorHandler(p3.locator('#account-chooser[open]'), async () => {
+    await p3.locator('#account-chooser [data-cancel]').click();
   });
   p3.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
   await p3.goto(`${BASE}/archive.html`);

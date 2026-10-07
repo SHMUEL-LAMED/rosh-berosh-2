@@ -186,7 +186,7 @@ ${heard.length > 30 ? `<p class="cue-hint">ועוד ${heard.length - 30} תוכ�
     if (e.target.closest('[data-clear-positions]')) { if (!confirm('למחוק את כל מיקומי ההאזנה השמורים?')) return; S.positions.clearAll(); U.notify('מיקומי ההאזנה נמחקו.', 'success'); return; }
     if (e.target.closest('[data-clear-all]')) {
       if (!confirm('למחוק מהחשבון את כל הנתונים האישיים (האזנה, תור, לאחר כך, היסטוריה והעדפות)?')) return;
-      try { await S.sb.call('/api/program/userdata', { method: 'DELETE' }); S.me.clear(); U.notify('הנתונים האישיים נמחקו.', 'success'); }
+      try { await S.sb.call('/api/program/userdata', { method: 'DELETE' }); S.me.clear(); S.sb.forgetAccounts(); U.notify('הנתונים האישיים נמחקו.', 'success'); }
       catch (err) { U.notify(`המחיקה לא הצליחה: ${err.message}`, 'error'); }
       return;
     }

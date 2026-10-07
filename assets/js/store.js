@@ -10,6 +10,7 @@
   const LS = {
     sb: 'rosh:cf:session',          // סשן ההתחברות
     remembered: 'rosh:remember-login', // כבר התחברו כאן — משחזרים מהכניסה הקיימת בביקור הבא
+    accounts: 'rosh:known-accounts',   // החשבונות שנכנסו מהמכשיר הזה — לחלון בחירת החשבון
     preview: 'rosh:preview',        // קישור תצוגה מקדימה (sessionStorage)
     sso: 'rosh:sso-checked',        // מתי נבדק לאחרונה אם מחוברים באתר הסקר
   };
@@ -17,6 +18,27 @@
 
   const read = (k, fb) => { try { const v = localStorage.getItem(k); return v == null ? fb : JSON.parse(v); } catch { return fb; } };
   const write = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); } catch { /* מצב פרטי */ } };
+
+  /* ---------- החשבונות שכבר נכנסו מהמכשיר הזה ----------
+     לחלון בחירת החשבון (RoshUI.accountChooser), בסגנון החלון של Google: שם, כתובת ותמונה
+     בלבד — בלי טוקן ובלי נתונים אישיים. נשארים גם אחרי התנתקות וגם כשהסשן פג, כדי שבביקור
+     הבא אפשר יהיה לבחור את החשבון בלחיצה אחת. עד שלושה, האחרון שנכנס ראשון. "מחיקת כל
+     הנתונים האישיים" באזור האישי מוחקת גם אותם. */
+  const KNOWN_ACCOUNTS = 3;
+  function knownAccounts() {
+    const list = read(LS.accounts, []);
+    if (!Array.isArray(list)) return [];
+    return list
+      .filter((a) => a && typeof a.email === 'string' && a.email.includes('@'))
+      .map((a) => ({ email: a.email, name: typeof a.name === 'string' ? a.name : '', picture: typeof a.picture === 'string' ? a.picture : '', at: Number(a.at) || 0 }))
+      .slice(0, KNOWN_ACCOUNTS);
+  }
+  function rememberAccount(user) {
+    const email = String(user?.email || '').trim().toLowerCase();
+    if (!email.includes('@')) return;
+    const rest = knownAccounts().filter((a) => a.email.toLowerCase() !== email);
+    write(LS.accounts, [{ email, name: String(user.name || ''), picture: typeof user.picture === 'string' ? user.picture : '', at: Date.now() }, ...rest].slice(0, KNOWN_ACCOUNTS));
+  }
 
   const state = {
     site: null,
@@ -283,7 +305,11 @@
     // כשהניהול מוטמע בתוך אתר הסקר, אחסון הדפדפן עלול להיות חסום — הסשן נשמר גם בזיכרון
     _mem: null,
     get session() { return read(LS.sb, null) ?? this._mem; },
-    set session(v) { this._mem = v; write(LS.sb, v); if (v?.token) write(LS.remembered, true); },
+    set session(v) { this._mem = v; write(LS.sb, v); if (v?.token) { write(LS.remembered, true); rememberAccount(v.user); } },
+    /** החשבונות שכבר נכנסו מהמכשיר הזה (לחלון בחירת החשבון), האחרון ראשון */
+    knownAccounts,
+    /** שוכח את החשבונות שנכנסו מהמכשיר הזה (לא מנתק) */
+    forgetAccounts() { write(LS.accounts, null); },
     get user() { return this.session?.user || null; },
     base(path) { return `${this.cfg.apiBase.replace(/\/$/, '')}${path}`; },
     headers(auth = true) {
@@ -357,13 +383,18 @@
     },
     /* כניסה ישירה עם Google מתוך האתר (בלי דף ביניים): כפתור Google נטען
        לתוך אלמנט, והאישור נשלח ל־Worker שמחזיר סשן. */
-    async google(el, { onDone, onError, onLeave, oneTap = false } = {}) {
+    async google(el, { onDone, onError, onLeave, oneTap = false, hint = '' } = {}) {
       const clientId = this.cfg?.googleClientId;
       if (!clientId || (!el && !oneTap)) throw new Error('כניסה עם Google אינה מוגדרת באתר הזה.');
       await this.loadGoogle();
       this._googleCallbacks = { onDone, onError, onLeave };   // onLeave: רגע לפני המעבר דרך אתר הסקר (הדף נטען מחדש)
-      if (!this._googleInitialized) window.google.accounts.id.initialize({
+      // hint: החשבון שנבחר בחלון בחירת החשבון. Google מקבל אותו כ־login_hint ומדלג אצלו על
+      // בחירת החשבון — גם בחלון הקופץ של הכפתור וגם בהצעה (prompt). רמז אחר מאתחל את הספרייה
+      // מחדש: ההגדרה האחרונה היא שקובעת.
+      const loginHint = String(hint || '').trim().toLowerCase();
+      if (!this._googleInitialized || this._googleHint !== loginHint) window.google.accounts.id.initialize({
         client_id: clientId, ux_mode: 'popup', auto_select: false, itp_support: true,
+        ...(loginHint ? { login_hint: loginHint } : {}),
         callback: async ({ credential }) => {
           try {
             let r;
@@ -384,7 +415,7 @@
           } catch (err) { this._googleCallbacks?.onError?.(err); }
         },
       });
-      this._googleInitialized = true;
+      this._googleInitialized = true; this._googleHint = loginHint;
       if (oneTap && !this.user) window.google.accounts.id.prompt();
       if (!el) return;
       el.innerHTML = '';

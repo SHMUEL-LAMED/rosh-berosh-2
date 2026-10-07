@@ -186,23 +186,21 @@
     try { origin = new URL(window.RoshStore?.sb?.cfg?.apiBase || '').origin; } catch { /* */ }
     return origin && window.RoshStore?.state?.source === 'cloudflare' ? `${origin}/admin#prog-${part}` : 'admin.html';
   }
-  /* בזמן האזנה הניהול נפתח בכרטיסייה חדשה: הוא באתר אחר, ומעבר אליו באותה כרטיסייה היה עוצר את
-     הנגן. ההאזנה ממשיכה כאן בלי הפסקה. הכרטיסייה נפתחת מיד בלחיצה (אחרת הדפדפן חוסם אותה), והכתובת
-     עם קוד המעבר נכנסת אליה כשהיא מוכנה. */
+  /* בזמן האזנה: הניהול (באתר הסקר) מקבל בכתובת את התוכנית ואת השנייה שבה אנחנו — והנגן שלו
+     ממשיך את אותה הקלטה מאותה נקודה. המיקום נשמר בחשבון רגע לפני המעבר (pagehide בנגן). */
   document.addEventListener('click', async (e) => {
     const a = e.target.closest?.('a[data-admin-go]');
     if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-    const sb = window.RoshStore?.sb;
-    const listening = !!window.RoshPlayer?.episode && !window.RoshPlayer.paused;
+    const sb = window.RoshStore?.sb, Pl = window.RoshPlayer;
+    const listening = !!Pl?.episode && !Pl.paused && /^https?:/.test(a.getAttribute('href') || '');
     const handoff = !!sb?.session?.token && /^https?:/.test(a.getAttribute('href') || '');
     if (!handoff && !listening) return;   // בלי חשבון מחובר — הקישור הרגיל, ושם נכנסים עם Google
     e.preventDefault();
-    const tab = listening ? window.open('', '_blank') : null;
-    if (tab) notify('הניהול נפתח בכרטיסייה חדשה — ההאזנה ממשיכה כאן.', 'info', { ttl: 5000 });
-    let target = a.href;
-    if (handoff) { try { target = `${await sb.handoff.toSurvey()}${new URL(a.href).hash}`; } catch { /* נכנסים שם עם Google */ } }
-    if (tab && !tab.closed) { try { tab.opener = null; } catch { /* */ } tab.location.href = target; }
-    else location.href = target;   // הדפדפן חסם כרטיסייה חדשה
+    let hash = new URL(a.href).hash;
+    if (listening) hash += `${hash ? '&' : '#'}resume=${encodeURIComponent(Pl.episode.id)}&t=${Math.floor(Pl.time)}`;
+    let target = `${a.href.split('#')[0]}${hash}`;
+    if (handoff) { try { target = `${await sb.handoff.toSurvey()}${hash}`; } catch { /* נכנסים שם עם Google */ } }
+    location.href = target;
   });
 
   /* ---------- עדכונים חדשים ----------

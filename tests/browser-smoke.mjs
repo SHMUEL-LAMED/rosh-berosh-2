@@ -428,6 +428,55 @@ for (const mode of ['slow', 'down']) {
   await c3.close();
 }
 
+/* ---------- התנתקות רק אחרי אישור ----------
+   לחיצה על "התנתקות" באזור האישי פותחת חלון אישור. Esc או "ביטול" משאירים מחוברים בלי שום
+   קריאה לשרת; רק "כן, להתנתק" מנתק — בשרת (מכל המקומות) ובדף. */
+{
+  const user = { email: 'user@example.com', name: 'מאזין', isAdmin: false };
+  const calls = [];
+  const c4 = await browser.newContext({ locale: 'he-IL', viewport: { width: 1200, height: 900 }, ignoreHTTPSErrors: !!process.env.HTTPS_PROXY });
+  await c4.route('https://accounts.google.com/gsi/client', (route) => route.fulfill({ contentType: 'application/javascript', body: 'window.google = { accounts: { id: { initialize() {}, prompt() {}, renderButton() {} } } };' }));
+  await c4.route('**/api/program/**', (route) => {
+    const req = route.request(), m = req.method(), path = new URL(req.url()).pathname.replace(/^.*\/api\/program\//, '');
+    const json = (body, status = 200) => route.fulfill({ status, headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'access-control-allow-headers': 'authorization,content-type' }, body: JSON.stringify(body) });
+    if (m === 'OPTIONS') return json({});
+    calls.push(`${m} ${path}`);
+    if (path === 'userdata') return json(m === 'GET' ? { data: {}, updatedAt: null } : { ok: true });
+    if (path === 'me') return json({ user });
+    if (path === 'likes') return json({ counts: {}, mine: [] });
+    if (path === 'logout') return json({ ok: true });
+    return route.abort();
+  });
+  const p = await c4.newPage();
+  await p.goto(`${BASE}/index.html`, { waitUntil: 'domcontentloaded' });
+  await p.evaluate((u) => localStorage.setItem('rosh:cf:session', JSON.stringify({ token: 'test', user: u })), user);
+  await p.goto(`${BASE}/me.html`);
+  await p.waitForSelector('#me-profile [data-logout]');
+  const signedIn = () => p.evaluate(() => !!window.RoshStore.sb.user && !!localStorage.getItem('rosh:cf:session'));
+  const logouts = () => calls.filter((c) => c === 'POST logout').length;
+  const dialogGone = () => p.waitForFunction(() => !document.getElementById('logout-dlg'));
+  await p.click('#me-profile [data-logout]');
+  await p.waitForSelector('#logout-dlg[open]');
+  check(await signedIn() && logouts() === 0, 'לחיצה על "התנתקות" פותחת חלון אישור — ועוד לא מנתקת');
+  check(await p.evaluate(() => document.activeElement?.matches('#logout-dlg .btn[data-no]')), 'ברירת המחדל בחלון: להישאר מחוברים');
+  await p.keyboard.press('Escape');
+  await dialogGone();
+  check(await signedIn() && logouts() === 0 && (await p.locator('#me-profile [data-logout]').count()) === 1, 'Esc סוגר את החלון ומשאיר מחוברים');
+  await p.click('#me-profile [data-logout]');
+  await p.waitForSelector('#logout-dlg[open]');
+  await p.click('#logout-dlg .btn[data-no]');
+  await dialogGone();
+  check(await signedIn() && logouts() === 0, '"ביטול" סוגר את החלון ומשאיר מחוברים');
+  await p.click('#me-profile [data-logout]');
+  await p.waitForSelector('#logout-dlg[open]');
+  await p.click('#logout-dlg [data-yes]');
+  await dialogGone();
+  await p.waitForSelector('#me-profile [data-google]', { state: 'attached' });   // הצעת ההתחברות חזרה (כפתור Google מדומה — ריק)
+  for (let i = 0; i < 30 && !logouts(); i++) await p.waitForTimeout(100);
+  check(!(await signedIn()) && logouts() === 1 && (await p.locator('#me-profile [data-logout]').count()) === 0, '"כן, להתנתק" מנתק: הסשן נמחק מהמכשיר, השרת מנתק מכל המקומות, והדף מציע להתחבר');
+  await c4.close();
+}
+
 /* ---------- עדכון בכוח (app-update.js) לא קוטע האזנה ----------
    פריסה חדשה: version.json שונה מה־?v= של הדף. הנגן (new Audio()) לא נמצא ב־DOM ו־body.is-playing
    יורד בזמן טעינת ההקלטה — ובכל זאת אסור לטעון את הדף כשלוחצים ▶ וההקלטה עוד נטענת, וגם לא כשיש

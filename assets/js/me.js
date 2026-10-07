@@ -24,6 +24,32 @@
 
   function firstName(u) { return String(u?.name || u?.email || '').split(/[\s@]/)[0] || ''; }
 
+  /** חלון אישור לפני ההתנתקות. מחזיר true רק כשלחצו "כן, להתנתק" — ✕, "ביטול", Esc או לחיצה
+      מחוץ לחלון משאירים מחוברים. ההתנתקות מנתקת מכל המקומות (store.js), ולכן שואלים קודם. */
+  function confirmSignOut(u) {
+    return new Promise((resolve) => {
+      document.getElementById('logout-dlg')?.remove();
+      const d = document.createElement('dialog');
+      d.id = 'logout-dlg';
+      d.className = 'sheet logout-dlg';
+      d.setAttribute('aria-labelledby', 'logout-title');
+      d.innerHTML = `
+<div class="section-title"><div><p class="kicker">האזור האישי</p><h2 id="logout-title">להתנתק מהחשבון?</h2></div><button type="button" class="icon-btn" data-no aria-label="ביטול">✕</button></div>
+<div class="card-body">
+  <div class="logout-warn" role="alert"><span aria-hidden="true">⚠</span><p>ההתנתקות מנתקת את החשבון${u?.email ? ` <b dir="ltr">${esc(u.email)}</b>` : ''} <b>מכל המכשירים</b> וגם מאתר הסקר. ההאזנות, התור, "לאחר כך" וההעדפות נשארים שמורים בחשבון ויחזרו בכניסה הבאה.</p></div>
+</div>
+<div class="card-foot"><button type="button" class="btn primary" data-no>ביטול — להישאר מחובר</button><button type="button" class="btn danger" data-yes>כן, להתנתק</button></div>`;
+      document.body.appendChild(d);
+      const done = (v) => { if (!d.isConnected) return; d.close(); d.remove(); resolve(v); };
+      d.addEventListener('click', (ev) => { if (ev.target === d || ev.target.closest('[data-no]')) done(false); else if (ev.target.closest('[data-yes]')) done(true); });
+      d.addEventListener('cancel', (ev) => { ev.preventDefault(); done(false); });
+      d.addEventListener('close', () => done(false));   // נסגר בדרך אחרת (Esc פעמיים) — לא מתנתקים
+      signal?.addEventListener('abort', () => done(false), { once: true });   // עברו לדף אחר — החלון נסגר בלי להתנתק
+      d.showModal();
+      d.querySelector('.btn.primary[data-no]').focus();   // ברירת המחדל — להישאר מחוברים
+    });
+  }
+
   function renderProfile(checking) {
     const u = S.sb.user;
     if (!u) {
@@ -171,7 +197,7 @@ ${heard.length > 30 ? `<p class="cue-hint">ועוד ${heard.length - 30} תוכ�
 
   /* ---------- אירועים ---------- */
   document.addEventListener('click', async (e) => {
-    if (e.target.closest('[data-logout]')) { S.signOut(); U.notify('התנתקתם.', 'success'); return; }
+    if (e.target.closest('[data-logout]')) { if (!await confirmSignOut(S.sb.user)) return; S.signOut(); U.notify('התנתקתם.', 'success'); return; }
     const play = e.target.closest('[data-play]');
     if (play) { const ep = S.byId(play.dataset.play); if (ep) Pl.isCurrent(ep.id) ? Pl.toggle() : Pl.load(ep); return; }
     const cue = e.target.closest('[data-cue]');

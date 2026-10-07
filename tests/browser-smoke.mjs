@@ -355,6 +355,7 @@ for (const mode of ['slow', 'down']) {
 {
   const user = { email: 'user@example.com', name: 'מאזין', isAdmin: false };
   let server = { later: [] };
+  let auth = true;   // false: הטוקן נדחה (401), כמו אחרי "התנתקות מכל המקומות" במכשיר אחר
   const calls = [];
   const c3 = await browser.newContext({ locale: 'he-IL', viewport: { width: 1200, height: 900 }, ignoreHTTPSErrors: !!process.env.HTTPS_PROXY });
   const rate = 8000, len = rate * 600, wav = Buffer.alloc(44 + len, 0x80);
@@ -362,12 +363,12 @@ for (const mode of ['slow', 'down']) {
   wav.writeUInt32LE(rate, 24); wav.writeUInt32LE(rate, 28); wav.writeUInt16LE(1, 32); wav.writeUInt16LE(8, 34); wav.write('data', 36); wav.writeUInt32LE(len, 40);
   await c3.route('**/api/program/**', (route) => {
     const req = route.request(), m = req.method(), path = new URL(req.url()).pathname.replace(/^.*\/api\/program\//, '');
-    const json = (body) => route.fulfill({ status: 200, headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'access-control-allow-headers': 'authorization,content-type' }, body: JSON.stringify(body) });
+    const json = (body, status = 200) => route.fulfill({ status, headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'access-control-allow-headers': 'authorization,content-type' }, body: JSON.stringify(body) });
     if (m === 'OPTIONS') return json({});
     if (path.startsWith('stream/')) return route.fulfill({ status: 200, headers: { 'access-control-allow-origin': '*', 'content-type': 'audio/wav' }, body: wav });
     calls.push(`${m} ${path}`);
     if (path === 'userdata') { if (m === 'PUT') server = req.postDataJSON().data; return json(m === 'GET' ? { data: server, updatedAt: null } : { ok: true }); }
-    if (path === 'me') return json({ user });
+    if (path === 'me') return auth ? json({ user }) : json({ user: null }, 401);
     if (path === 'likes') return json({ counts: {}, mine: [] });
     return route.abort();
   });
@@ -390,6 +391,37 @@ for (const mode of ['slow', 'down']) {
   await p.waitForFunction(() => !window.RoshStore.me.dirty && !window.RoshStore.me.saving, null, { timeout: 8000 }).catch(() => {});
   await p.waitForTimeout(300);
   check(server.later?.includes('from-other-device') && server.positions?.[id]?.dur > 0 && server.listenSeconds > 0, `בעצירה המיקום וזמן ההאזנה נשמרים, בלי לדרוס את מה שנשמר ממכשיר אחר (later: ${JSON.stringify(server.later)})`);
+
+  /* זמן ההאזנה לא מוכפל. נתונים שכבר נקראו מהחשבון אינם "ביקור לפני התחברות": גם אחרי שהסשן נדחה
+     (401 בבדיקת המנהל — כמו אחרי "התנתקות מכל המקומות" במכשיר אחר), קריאה בלי סשן, וכניסה מחדש —
+     הסכום בחשבון נשאר כפי שהיה (הגרסה הקודמת הכפילה אותו בכל מחזור כזה). */
+  const before = server.listenSeconds;
+  auth = false;
+  await p.evaluate(() => window.RoshStore.sb.isAdmin());
+  const left = await p.evaluate(() => ({ account: window.RoshStore.me.account, seconds: window.RoshStore.me.data.listenSeconds, session: localStorage.getItem('rosh:cf:session') }));
+  check(!left.account && left.seconds === 0 && !left.session, `הטוקן נדחה: הסשן והנתונים של החשבון יוצאים מהדף (${JSON.stringify(left)})`);
+  auth = true;
+  await p.evaluate(async (u) => {
+    await window.RoshStore.me.load();   // קריאה בלי סשן (כמו בחזרה ללשונית)
+    window.RoshStore.sb.session = { token: 'test', user: u };
+    await window.RoshStore.me.load(); await window.RoshStore.me.save(true);   // כמו בכניסה עם Google
+  }, user);
+  const after = await p.evaluate(() => window.RoshStore.me.data.listenSeconds);
+  check(server.listenSeconds === before && after === before, `כניסה מחדש אחרי דחיית הטוקן: זמן ההאזנה נשאר ${before} (בחשבון ${server.listenSeconds}, בדף ${after})`);
+  // הסשן לא נקרא לרגע (קריאה בלי משתמש) ואז נקרא שוב: הנתונים שבדף עדיין של החשבון — מיזוג לפי ההפרש
+  await p.evaluate(async () => {
+    const s = localStorage.getItem('rosh:cf:session'); localStorage.removeItem('rosh:cf:session'); window.RoshStore.sb._mem = null;
+    await window.RoshStore.me.load();
+    localStorage.setItem('rosh:cf:session', s);
+    await window.RoshStore.me.load(); await window.RoshStore.me.save(true);
+  });
+  const again = await p.evaluate(() => ({ account: window.RoshStore.me.account, seconds: window.RoshStore.me.data.listenSeconds }));
+  check(server.listenSeconds === before && again.seconds === before && again.account === user.email, `סשן שלא נקרא לרגע: זמן ההאזנה נשאר ${before} (בחשבון ${server.listenSeconds}, בדף ${again.seconds})`);
+  // ערך שבור מגרסה קודמת (יותר ממה שאפשר לצבור מאז תחילת הספירה) מתאפס בקריאה
+  server = { ...server, listenSeconds: 892850216248800 };
+  await p.evaluate(() => window.RoshStore.me.load());
+  const sane = await p.evaluate(() => window.RoshStore.me.data.listenSeconds);
+  check(sane === 0, `זמן האזנה בלתי אפשרי בחשבון מתאפס בדף (${sane})`);
   await c3.close();
 }
 

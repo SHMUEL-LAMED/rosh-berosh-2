@@ -479,7 +479,10 @@
     async isAdmin() {
       if (!this.session?.token) return false;
       const r = await fetch(this.base('/api/program/me'), { headers:this.headers() });
-      if (!r.ok) { if (r.status === 401) this.session = null; return false; }
+      // הטוקן נדחה (למשל אחרי "התנתקות מכל המקומות" במכשיר אחר): הסשן נמחק, והנתונים של החשבון
+      // יוצאים מהדף — אחרת בכניסה הבאה הם היו נחשבים "ביקור לפני התחברות" ומתווספים שוב על מה
+      // שבחשבון, וזמן ההאזנה היה מוכפל
+      if (!r.ok) { if (r.status === 401) forgetSession(); return false; }
       const j = await r.json();
       if (j.user) this.session = { ...this.session, user:{ ...this.session.user, ...j.user, isAdmin: !!j.user.isAdmin } };
       return !!j.user?.isAdmin;
@@ -879,6 +882,10 @@
      הנוכחי, ומצטרפים לחשבון כשהוא מתחבר. */
 
   const ME_KEYS = ['positions', 'later', 'history', 'prefs', 'queue', 'finished', 'last', 'listenSeconds'];
+  const LISTEN_SINCE = Date.UTC(2026, 8, 23);   // מאז מתי נספר זמן ההאזנה באזור האישי
+  /** זמן האזנה שאי אפשר היה לצבור מאז תחילת הספירה — ערך שבור (הוכפל בגרסה קודמת), מתחילים מחדש.
+      לפחות שנה, כדי ששעון מכשיר שגוי לא יאפס ערך תקין */
+  const maxListenSeconds = () => Math.max(365 * 86400, (Date.now() - LISTEN_SINCE) / 1000);
   const blank = () => ({ positions: {}, later: [], history: [], prefs: {}, queue: [], finished: [], last: null, listenSeconds: 0, moments: {} });
   function cleanMe(raw) {
     const d = blank();
@@ -892,6 +899,7 @@
     d.prefs = raw.prefs && typeof raw.prefs === 'object' ? { ...raw.prefs } : {};
     d.last = raw.last && raw.last.id ? { id: String(raw.last.id), t: Math.floor(Number(raw.last.t) || 0) } : null;
     d.listenSeconds = Math.max(0, Math.floor(Number(raw.listenSeconds) || 0));
+    if (d.listenSeconds > maxListenSeconds()) d.listenSeconds = 0;
     if (raw.moments && typeof raw.moments === 'object') {
       for (const [id, list] of Object.entries(raw.moments)) if (Array.isArray(list)) d.moments[id] = [...new Set(list.map(Number).filter((n) => Number.isFinite(n) && n >= 0))].sort((a, b) => a - b).slice(0, 200);
     }
@@ -963,17 +971,23 @@
     /** טוען את הנתונים מהחשבון (ומצרף אליהם את מה שנעשה בביקור הזה) */
     async load() {
       const email = sb.user?.email || null;
-      if (!email || !sb.configured) { this.account = null; this.loaded = true; return this.data; }
+      // בלי סשן קריא כרגע: הנתונים שבדף נשארים של החשבון שממנו נקראו (account לא מתאפס — אחרת
+      // בקריאה הבאה הם היו נחשבים "ביקור לפני התחברות" ומתווספים שוב על מה שבשרת, וזמן ההאזנה
+      // היה מוכפל). התנתקות אמיתית עוברת דרך reset (forgetSession, signOut, אירוע storage).
+      if (!email || !sb.configured) { this.loaded = true; return this.data; }
       clearTimeout(this.retry);
       if (this.saving) await this.saving.catch(() => {});   // קוראים אחרי השמירה שבדרך, לא לפניה
       try {
         const r = await this.fetchData();
         if (sb.user?.email !== email) return this.data;   // החשבון התחלף בזמן הקריאה
-        const same = this.account === email;
-        const visit = !same && (hasContent(this.data) || this.dirty) ? this.data : null;   // מה שנעשה לפני ההתחברות
+        // חשבון אחר נכנס בדף הזה: הנתונים של הקודם יוצאים (כמו בהתנתקות) ואינם עוברים אליו
+        if (this.account && this.account !== email) { this.data = blank(); this.base = null; this.dirty = false; }
+        // "ביקור": מה שנעשה בדף לפני ההתחברות — רק כל עוד שום דבר לא נקרא מחשבון (אין base).
+        // נתונים שכבר נקראו מהחשבון מתמזגים תמיד לפי ההפרש מאז הקריאה האחרונה (מיזוג תלת־כיווני),
+        // ולעולם לא מתווספים שוב על מה שבשרת — אחרת זמן ההאזנה היה מוכפל בכל קריאה כזו
+        const visit = !this.base && (hasContent(this.data) || this.dirty) ? this.data : null;
         const server = cleanMe(r.data);
-        // אותו חשבון עם שינויים שעוד לא נשמרו: מיזוג תלת־כיווני (זמן ההאזנה לא נספר פעמיים)
-        this.data = visit ? mergeMe(server, visit) : (same && this.dirty ? merge3(this.base, this.data, server) : server);
+        this.data = visit ? mergeMe(server, visit) : (this.dirty ? merge3(this.base, this.data, server) : server);
         this.base = cleanMe(r.data);   // עותק נפרד: השינויים בדף לא נוגעים בו
         // העברה חד־פעמית: נתונים ישנים שנשמרו פעם במכשיר עוברים לחשבון ונמחקים מהמכשיר
         const legacy = takeLegacy();
@@ -1147,7 +1161,13 @@
 
   /** סיכום האזנה לאזור האישי: זמן האזנה אמיתי ותוכניות שנשמעו עד הסוף */
   const listening = {
-    tick(seconds = 1) { me.data.listenSeconds += seconds; me.dirty = true; if (me.account && !me.timer) me.timer = setTimeout(() => me.save(), 30000); },
+    tick(seconds = 1) {
+      // לכל היותר יום בקריאה אחת (הנגן מודד לפי השעון) — ערך שגוי לא יכול לנפח את הסכום
+      seconds = Math.min(Number(seconds) || 0, 86400);
+      if (seconds <= 0) return;
+      me.data.listenSeconds += seconds; me.dirty = true;
+      if (me.account && !me.timer) me.timer = setTimeout(() => me.save(), 30000);
+    },
     finish(id) { if (!me.data.finished.includes(id)) { me.data.finished = [id, ...me.data.finished]; me.change(); } },
     get seconds() { return me.data.listenSeconds; },
     get finished() { return me.data.finished; },

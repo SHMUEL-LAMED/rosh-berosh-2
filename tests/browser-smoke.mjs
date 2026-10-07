@@ -417,11 +417,14 @@ for (const mode of ['slow', 'down']) {
   });
   const again = await p.evaluate(() => ({ account: window.RoshStore.me.account, seconds: window.RoshStore.me.data.listenSeconds }));
   check(server.listenSeconds === before && again.seconds === before && again.account === user.email, `סשן שלא נקרא לרגע: זמן ההאזנה נשאר ${before} (בחשבון ${server.listenSeconds}, בדף ${again.seconds})`);
-  // ערך שבור מגרסה קודמת (יותר ממה שאפשר לצבור מאז תחילת הספירה) מתאפס בקריאה
-  server = { ...server, listenSeconds: 892850216248800 };
+  // ערך שבור מגרסה קודמת (יותר ממה שאפשר לצבור מאז תחילת הספירה) מוחלף בהערכה מהנתונים: תוכנית
+  // שנשמעה עד הסוף — במלואה; תוכנית שהתחילו — עד המקום שהגיעו אליו
+  const finishedId = 'finished-ep', finishedDur = 1800;
+  server = { ...server, listenSeconds: 892850216248800, finished: [finishedId], history: [{ id: finishedId, at: 1 }, ...(server.history || [])], positions: { ...server.positions, [finishedId]: { t: 1795, dur: finishedDur, at: 1 } } };
+  const expected = Object.entries(server.positions).reduce((sum, [eid, pos]) => sum + (eid === finishedId ? finishedDur : pos.t), 0);
   await p.evaluate(() => window.RoshStore.me.load());
   const sane = await p.evaluate(() => window.RoshStore.me.data.listenSeconds);
-  check(sane === 0, `זמן האזנה בלתי אפשרי בחשבון מתאפס בדף (${sane})`);
+  check(sane > 0 && sane === expected, `זמן האזנה בלתי אפשרי בחשבון מוחלף בהערכה מהמיקומים השמורים (${sane}, צפוי ${expected})`);
   await c3.close();
 }
 

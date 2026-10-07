@@ -459,6 +459,47 @@ for (const mode of ['slow', 'down']) {
   await mobile.close();
 }
 
+/* ---------- ממשיכים בדיוק מאיפה שעצרתם ---------- */
+// כמו באייפון: קפיצה שנעשית לפני שההקלטה נטענה נבלעת. הנגן צריך להחיל אותה כשההקלטה מוכנה,
+// ובינתיים לא לדרוס את המיקום השמור ב־0.
+{
+  const rctx = await browser.newContext({ locale: 'he-IL', ignoreHTTPSErrors: !!process.env.HTTPS_PROXY });
+  await rctx.addInitScript(() => {
+    const d = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'currentTime');
+    Object.defineProperty(HTMLMediaElement.prototype, 'currentTime', { configurable: true, get() { return d.get.call(this); }, set(v) { if (this.readyState >= 1) d.set.call(this, v); } });
+  });
+  // הקלטה שקטה של 50 דקות (WAV, 1000 דגימות בשנייה) עם תמיכה ב־Range, כמו ה־Worker
+  const secs = 3000, data = 1000 * secs, wav = Buffer.alloc(44 + data, 128);
+  wav.write('RIFF', 0); wav.writeUInt32LE(36 + data, 4); wav.write('WAVEfmt ', 8); wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22);
+  wav.writeUInt32LE(1000, 24); wav.writeUInt32LE(1000, 28); wav.writeUInt16LE(1, 32); wav.writeUInt16LE(8, 34); wav.write('data', 36); wav.writeUInt32LE(data, 40);
+  await rctx.route(/\/api\/program\/stream\/|drive\.usercontent\.google\.com/, (route) => {
+    const m = /bytes=(\d+)-(\d*)/.exec(route.request().headers().range || '');
+    if (!m) return route.fulfill({ status: 200, headers: { 'content-type': 'audio/wav', 'accept-ranges': 'bytes' }, body: wav });
+    const a = Number(m[1]), b = m[2] ? Number(m[2]) : wav.length - 1;
+    return route.fulfill({ status: 206, headers: { 'content-type': 'audio/wav', 'accept-ranges': 'bytes', 'content-range': `bytes ${a}-${b}/${wav.length}` }, body: wav.subarray(a, b + 1) });
+  });
+  const rp = await rctx.newPage();
+  await rp.goto(BASE + '/index.html');
+  await rp.waitForFunction(() => window.RoshStore && window.RoshPlayer);
+  const r = await rp.evaluate(async () => {
+    await window.RoshStore.ready;
+    const S = window.RoshStore, ep = S.state.data.episodes.find((e) => e.stream && e.visible);
+    S.positions.set(ep.id, 1234, 3000);
+    window.RoshPlayer.load(ep, { autoplay: false, quiet: true });
+    const before = window.RoshPlayer.time;
+    window.RoshPlayer.play();
+    await new Promise((ok) => setTimeout(ok, 2500));
+    const after = window.RoshPlayer.time;
+    window.RoshPlayer.pause();
+    await new Promise((ok) => setTimeout(ok, 200));
+    return { before, after, saved: S.positions.get(ep.id)?.t };
+  });
+  check(r.before === 1234, `המיקום השמור נשמר גם לפני שההקלטה נטענה (${r.before})`);
+  check(r.after >= 1234 && r.after < 1245, `הניגון ממשיך מהמקום המדויק (${Math.round(r.after)})`);
+  check(r.saved >= 1234 && r.saved < 1245, `בעצירה נשמר המקום המדויק, לא 0 (${r.saved})`);
+  await rctx.close();
+}
+
 /* ---------- סיכום ---------- */
 // ה־Worker מאשר CORS רק ל־origin של האתר הפרוס, ולכן מול שרת מקומי הקטלוג נופל
 // לעותק שבמאגר (זה מה שהבדיקה בודקת) — שגיאת ה־CORS הזו אינה תקלה באתר.

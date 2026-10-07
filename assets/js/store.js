@@ -362,8 +362,11 @@
       if (!clientId || (!el && !oneTap)) throw new Error('כניסה עם Google אינה מוגדרת באתר הזה.');
       await this.loadGoogle();
       this._googleCallbacks = { onDone, onError, onLeave };   // onLeave: רגע לפני המעבר דרך אתר הסקר (הדף נטען מחדש)
+      // הלחיצה על כפתור Google פותחת את חלון בחירת החשבון של הדפדפן עצמו (FedCM): "כניסה אל האתר
+      // באמצעות google.com — בחירת חשבון להמשך", עם "שימוש בחשבון אחר" ו"ביטול" — במקום חלון קופץ
+      // נפרד. דפדפן בלי FedCM חוזר לבד לחלון הקופץ (ux_mode).
       if (!this._googleInitialized) window.google.accounts.id.initialize({
-        client_id: clientId, ux_mode: 'popup', auto_select: false, itp_support: true,
+        client_id: clientId, ux_mode: 'popup', auto_select: false, itp_support: true, use_fedcm_for_button: true,
         callback: async ({ credential }) => {
           try {
             let r;

@@ -186,15 +186,23 @@
     try { origin = new URL(window.RoshStore?.sb?.cfg?.apiBase || '').origin; } catch { /* */ }
     return origin && window.RoshStore?.state?.source === 'cloudflare' ? `${origin}/admin#prog-${part}` : 'admin.html';
   }
+  /* בזמן האזנה הניהול נפתח בכרטיסייה חדשה: הוא באתר אחר, ומעבר אליו באותה כרטיסייה היה עוצר את
+     הנגן. ההאזנה ממשיכה כאן בלי הפסקה. הכרטיסייה נפתחת מיד בלחיצה (אחרת הדפדפן חוסם אותה), והכתובת
+     עם קוד המעבר נכנסת אליה כשהיא מוכנה. */
   document.addEventListener('click', async (e) => {
     const a = e.target.closest?.('a[data-admin-go]');
     if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     const sb = window.RoshStore?.sb;
-    if (!sb?.session?.token || !/^https?:/.test(a.getAttribute('href') || '')) return;   // בלי חשבון מחובר — הקישור הרגיל, ושם נכנסים עם Google
+    const listening = !!window.RoshPlayer?.episode && !window.RoshPlayer.paused;
+    const handoff = !!sb?.session?.token && /^https?:/.test(a.getAttribute('href') || '');
+    if (!handoff && !listening) return;   // בלי חשבון מחובר — הקישור הרגיל, ושם נכנסים עם Google
     e.preventDefault();
+    const tab = listening ? window.open('', '_blank') : null;
+    if (tab) notify('הניהול נפתח בכרטיסייה חדשה — ההאזנה ממשיכה כאן.', 'info', { ttl: 5000 });
     let target = a.href;
-    try { target = `${await sb.handoff.toSurvey()}${new URL(a.href).hash}`; } catch { /* נכנסים שם עם Google */ }
-    location.href = target;
+    if (handoff) { try { target = `${await sb.handoff.toSurvey()}${new URL(a.href).hash}`; } catch { /* נכנסים שם עם Google */ } }
+    if (tab && !tab.closed) { try { tab.opener = null; } catch { /* */ } tab.location.href = target; }
+    else location.href = target;   // הדפדפן חסם כרטיסייה חדשה
   });
 
   /* ---------- עדכונים חדשים ----------

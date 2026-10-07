@@ -468,10 +468,10 @@ for (const mode of ['slow', 'down']) {
     const d = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'currentTime');
     Object.defineProperty(HTMLMediaElement.prototype, 'currentTime', { configurable: true, get() { return d.get.call(this); }, set(v) { if (this.readyState >= 1) d.set.call(this, v); } });
   });
-  // הקלטה שקטה של 50 דקות (WAV, 1000 דגימות בשנייה) עם תמיכה ב־Range, כמו ה־Worker
-  const secs = 3000, data = 1000 * secs, wav = Buffer.alloc(44 + data, 128);
+  // הקלטה שקטה של 50 דקות (WAV, 8000 דגימות בשנייה) עם תמיכה ב־Range, כמו ה־Worker
+  const secs = 3000, data = 8000 * secs, wav = Buffer.alloc(44 + data, 128);
   wav.write('RIFF', 0); wav.writeUInt32LE(36 + data, 4); wav.write('WAVEfmt ', 8); wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22);
-  wav.writeUInt32LE(1000, 24); wav.writeUInt32LE(1000, 28); wav.writeUInt16LE(1, 32); wav.writeUInt16LE(8, 34); wav.write('data', 36); wav.writeUInt32LE(data, 40);
+  wav.writeUInt32LE(8000, 24); wav.writeUInt32LE(8000, 28); wav.writeUInt16LE(1, 32); wav.writeUInt16LE(8, 34); wav.write('data', 36); wav.writeUInt32LE(data, 40);
   await rctx.route(/\/api\/program\/stream\/|drive\.usercontent\.google\.com/, (route) => {
     const m = /bytes=(\d+)-(\d*)/.exec(route.request().headers().range || '');
     if (!m) return route.fulfill({ status: 200, headers: { 'content-type': 'audio/wav', 'accept-ranges': 'bytes' }, body: wav });
@@ -497,6 +497,27 @@ for (const mode of ['slow', 'down']) {
   check(r.before === 1234, `המיקום השמור נשמר גם לפני שההקלטה נטענה (${r.before})`);
   check(r.after >= 1234 && r.after < 1245, `הניגון ממשיך מהמקום המדויק (${Math.round(r.after)})`);
   check(r.saved >= 1234 && r.saved < 1245, `בעצירה נשמר המקום המדויק, לא 0 (${r.saved})`);
+
+  // מנהל שמאזין ועובר לניהול: הניהול (באתר הסקר) נפתח בכרטיסייה חדשה, וההאזנה ממשיכה כאן
+  await rctx.route((u) => u.pathname === '/admin' || /\/api\/program\/handoff/.test(u.pathname), (route) => route.request().method() === 'POST'
+    ? route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ code: 'x' }) })
+    : route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>ניהול</title>' }));
+  await rp.evaluate(() => localStorage.setItem('rosh:cf:session', JSON.stringify({ token: 'test', user: { email: 'admin@example.com', name: 'בדיקה', isAdmin: true } })));
+  await rp.reload();
+  await rp.waitForSelector('.site-nav .admin-link');
+  await rp.evaluate(async () => {
+    await window.RoshStore.ready;
+    const ep = window.RoshStore.state.data.episodes.find((e) => e.stream && e.visible);
+    window.RoshPlayer.load(ep, { at: 0, autoplay: false, quiet: true });
+  });
+  await rp.locator('.dock [data-toggle]').click();
+  await rp.waitForFunction(() => !window.RoshPlayer.paused && window.RoshPlayer.time > 0.3, null, { timeout: 15000 }).catch(() => {});
+  const [adminTab] = await Promise.all([rctx.waitForEvent('page', { timeout: 10000 }).catch(() => null), rp.locator('.site-nav .admin-link').click()]);
+  await rp.waitForTimeout(1500);
+  check(!!adminTab && rp.url().includes('/index.html'), 'בזמן האזנה הניהול נפתח בכרטיסייה חדשה, והאתר נשאר פתוח');
+  const t1 = await rp.evaluate(() => window.RoshPlayer.time);
+  await rp.waitForTimeout(1200);
+  check(await rp.evaluate((t) => !window.RoshPlayer.paused && window.RoshPlayer.time > t, t1), 'ההאזנה ממשיכה אחרי המעבר לניהול');
   await rctx.close();
 }
 

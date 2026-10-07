@@ -498,26 +498,26 @@ for (const mode of ['slow', 'down']) {
   check(r.after >= 1234 && r.after < 1245, `הניגון ממשיך מהמקום המדויק (${Math.round(r.after)})`);
   check(r.saved >= 1234 && r.saved < 1245, `בעצירה נשמר המקום המדויק, לא 0 (${r.saved})`);
 
-  // מנהל שמאזין ועובר לניהול: הניהול (באתר הסקר) נפתח בכרטיסייה חדשה, וההאזנה ממשיכה כאן
+  // מנהל שמאזין ועובר לניהול: הקישור נושא את התוכנית והשנייה הנוכחית, כדי שהנגן של דף הניהול ימשיך משם
   await rctx.route((u) => u.pathname === '/admin' || /\/api\/program\/handoff/.test(u.pathname), (route) => route.request().method() === 'POST'
     ? route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ code: 'x' }) })
     : route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>ניהול</title>' }));
   await rp.evaluate(() => localStorage.setItem('rosh:cf:session', JSON.stringify({ token: 'test', user: { email: 'admin@example.com', name: 'בדיקה', isAdmin: true } })));
   await rp.reload();
   await rp.waitForSelector('.site-nav .admin-link');
-  await rp.evaluate(async () => {
+  const epId = await rp.evaluate(async () => {
     await window.RoshStore.ready;
     const ep = window.RoshStore.state.data.episodes.find((e) => e.stream && e.visible);
     window.RoshPlayer.load(ep, { at: 0, autoplay: false, quiet: true });
+    return ep.id;
   });
   await rp.locator('.dock [data-toggle]').click();
   await rp.waitForFunction(() => !window.RoshPlayer.paused && window.RoshPlayer.time > 0.3, null, { timeout: 15000 }).catch(() => {});
-  const [adminTab] = await Promise.all([rctx.waitForEvent('page', { timeout: 10000 }).catch(() => null), rp.locator('.site-nav .admin-link').click()]);
-  await rp.waitForTimeout(1500);
-  check(!!adminTab && rp.url().includes('/index.html'), 'בזמן האזנה הניהול נפתח בכרטיסייה חדשה, והאתר נשאר פתוח');
-  const t1 = await rp.evaluate(() => window.RoshPlayer.time);
-  await rp.waitForTimeout(1200);
-  check(await rp.evaluate((t) => !window.RoshPlayer.paused && window.RoshPlayer.time > t, t1), 'ההאזנה ממשיכה אחרי המעבר לניהול');
+  await rp.evaluate(() => window.RoshPlayer.seek(1500));
+  await rp.locator('.site-nav .admin-link').click();
+  await rp.waitForURL(/handoff\/x#/, { timeout: 10000 }).catch(() => {});
+  const m = /#prog-programs&resume=([^&]+)&t=(\d+)$/.exec(rp.url());
+  check(!!m && decodeURIComponent(m[1]) === epId && Number(m[2]) >= 1500 && Number(m[2]) < 1510, `בזמן האזנה הקישור לניהול נושא את התוכנית והשנייה הנוכחית (${rp.url().split('#')[1] || ''})`);
   await rctx.close();
 }
 

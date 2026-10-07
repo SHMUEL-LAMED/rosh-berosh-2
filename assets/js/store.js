@@ -886,6 +886,16 @@
   /** זמן האזנה שאי אפשר היה לצבור מאז תחילת הספירה — ערך שבור (הוכפל בגרסה קודמת), מתחילים מחדש.
       לפחות שנה, כדי ששעון מכשיר שגוי לא יאפס ערך תקין */
   const maxListenSeconds = () => Math.max(365 * 86400, (Date.now() - LISTEN_SINCE) / 1000);
+  /** הערכת זמן ההאזנה מהנתונים עצמם, כשהערך השמור שבור: תוכנית שנשמעה עד הסוף נספרת במלואה
+      (האורך שנמדד בניגון, או מהקטלוג), ותוכנית שהתחילו נספרת עד המקום שהגיעו אליו */
+  function estimateListen(d) {
+    let total = 0;
+    for (const id of new Set([...d.history.map((h) => h.id), ...Object.keys(d.positions)])) {
+      const p = d.positions[id];
+      total += d.finished.includes(id) ? (p?.dur || byId(id)?.duration || 0) : (p?.t || 0);
+    }
+    return Math.min(Math.floor(total), Math.floor(maxListenSeconds()));
+  }
   const blank = () => ({ positions: {}, later: [], history: [], prefs: {}, queue: [], finished: [], last: null, listenSeconds: 0, moments: {} });
   function cleanMe(raw) {
     const d = blank();
@@ -899,7 +909,7 @@
     d.prefs = raw.prefs && typeof raw.prefs === 'object' ? { ...raw.prefs } : {};
     d.last = raw.last && raw.last.id ? { id: String(raw.last.id), t: Math.floor(Number(raw.last.t) || 0) } : null;
     d.listenSeconds = Math.max(0, Math.floor(Number(raw.listenSeconds) || 0));
-    if (d.listenSeconds > maxListenSeconds()) d.listenSeconds = 0;
+    if (d.listenSeconds > maxListenSeconds()) d.listenSeconds = estimateListen(d);
     if (raw.moments && typeof raw.moments === 'object') {
       for (const [id, list] of Object.entries(raw.moments)) if (Array.isArray(list)) d.moments[id] = [...new Set(list.map(Number).filter((n) => Number.isFinite(n) && n >= 0))].sort((a, b) => a - b).slice(0, 200);
     }

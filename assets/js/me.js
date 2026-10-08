@@ -36,7 +36,7 @@
       d.innerHTML = `
 <div class="section-title"><div><p class="kicker">האזור האישי</p><h2 id="logout-title">להתנתק מהחשבון?</h2></div><button type="button" class="icon-btn" data-no aria-label="ביטול">✕</button></div>
 <div class="card-body">
-  <div class="logout-warn" role="alert"><span aria-hidden="true">⚠</span><p>ההתנתקות מנתקת את החשבון${u?.email ? ` <b dir="ltr">${esc(u.email)}</b>` : ''} <b>מכל המכשירים</b> וגם מאתר הסקר. ההאזנות, התור, "לאחר כך" וההעדפות נשארים שמורים בחשבון ויחזרו בכניסה הבאה.</p></div>
+  <div class="logout-warn" role="alert"><span aria-hidden="true">⚠</span><p>ההתנתקות מנתקת את החשבון${u?.email ? ` <b dir="ltr">${esc(u.email)}</b>` : ''} <b>מכל המכשירים</b>. ההאזנות, התור, "לאחר כך" וההעדפות נשארים שמורים בחשבון ויחזרו בכניסה הבאה.</p></div>
 </div>
 <div class="card-foot"><button type="button" class="btn primary" data-no>ביטול — להישאר מחובר</button><button type="button" class="btn danger" data-yes>כן, להתנתק</button></div>`;
       document.body.appendChild(d);

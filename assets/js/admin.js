@@ -273,6 +273,7 @@
     const os = from.settings, ns = to.settings;
     if (JSON.stringify(os.banner) !== JSON.stringify(ns.banner)) out.push({ id: '', head: 'ההודעה בראש האתר השתנתה', rows: [ns.banner.enabled ? `"${short(ns.banner.text)}"` : 'ההודעה כבויה'] });
     if (JSON.stringify(os.updates) !== JSON.stringify(ns.updates)) out.push({ id: '', head: 'דף העדכונים השתנה', rows: [] });
+    if (JSON.stringify(os.popups) !== JSON.stringify(ns.popups)) out.push({ id: '', head: 'ההודעות הקופצות השתנו', rows: [`${(ns.popups || []).filter((p) => p.enabled).length} פעילות מתוך ${(ns.popups || []).length}`] });
     if (JSON.stringify(os.contacts) !== JSON.stringify(ns.contacts)) out.push({ id: '', head: 'פרטי הקשר השתנו', rows: Object.keys(ns.contacts).filter((k) => os.contacts[k] !== ns.contacts[k]).map((k) => `${short(os.contacts[k])} ← ${short(ns.contacts[k])}`) });
     return out;
   }
@@ -1697,6 +1698,8 @@ ${st.transcript != null ? `<details class="ai-transcript" open><summary>התמל
     const ups = A.data.settings.updates || [];
     $('#panel').innerHTML = `
 ${window.RoshPollAdmin?.siteCard() || ''}
+
+${window.RoshPopupAdmin?.siteCard() || ''}
 
 <div class="card">
   <div class="section-title"><div><p class="kicker">הודעה</p><h2>הודעה בראש האתר</h2></div><span class="toggle${b.enabled ? ' on' : ''}" aria-hidden="true">${!b.enabled ? 'כבויה' : b.from && b.from > S.todayIL() ? 'מתוזמנת' : 'מוצגת'}</span></div>

@@ -35,3 +35,4 @@ jobs:
           node tests/admin-smoke.mjs
           node tests/mail-smoke.mjs
           node tests/polls-smoke.mjs
+          node tests/popups-smoke.mjs

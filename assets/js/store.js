@@ -112,7 +112,7 @@
     const c = raw?.contacts && typeof raw.contacts === 'object' ? raw.contacts : {};
     const contacts = { ...CONTACT_DEFAULTS };
     for (const k of Object.keys(CONTACT_DEFAULTS)) if (typeof c[k] === 'string') contacts[k] = c[k].trim();
-    return { banner, updates, survey, contacts, polls: normPolls(raw?.polls), guests: normGuests(raw?.guests), hosts: normHosts(raw?.hosts) };
+    return { banner, updates, survey, contacts, polls: normPolls(raw?.polls), popups: normPopups(raw?.popups), guests: normGuests(raw?.guests), hosts: normHosts(raw?.hosts) };
   }
 
   /* ---------- אורחים: הפרופיל שנכתב בניהול (תמונה, שורת תפקיד, כמה מילים וקישורים).
@@ -228,6 +228,41 @@
   function normPolls(raw) {
     const seen = new Set();
     return (Array.isArray(raw) ? raw : []).slice(0, 50).map(normPoll).filter((p) => p && !seen.has(p.id) && seen.add(p.id));
+  }
+  /* ---------- הודעות קופצות (settings.popups): אותם כללים כמו בשרת (worker/program-popups.js) ---------- */
+  const POPUP_ENUM = {
+    kind: ['modal', 'sheet', 'toast', 'bar'], tone: ['gold', 'violet', 'teal', 'success', 'danger', 'night'],
+    audience: ['all', 'signed', 'guest'], visitors: ['all', 'new', 'returning'], freq: ['once', 'session', 'daily', 'always'], trigger: ['delay', 'scroll', 'exit'],
+  };
+  const POPUP_PAGES = ['home', 'archive', 'episode', 'me', 'updates', 'other'];
+  const popupUrl = (v) => {
+    const u = String(v ?? '').trim().slice(0, 500);
+    if (!u) return '';
+    if (/^(https?:\/\/|mailto:|tel:)[^\s]+$/i.test(u)) return u;
+    if (/^[a-z][a-z0-9+.-]*:/i.test(u) || u.startsWith('//')) return '';
+    return /^[\w./?#&=%~+-][^\s]*$/u.test(u) ? u : '';
+  };
+  const clampInt = (v, max) => Math.max(0, Math.min(max, Math.round(Number(v) || 0)));
+  function normPopup(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const pickE = (k) => (POPUP_ENUM[k].includes(raw[k]) ? raw[k] : POPUP_ENUM[k][0]);
+    const line = (v, max) => String(v ?? '').replace(/\s+/g, ' ').slice(0, max);
+    return {
+      id: pollKey(raw.id) || newKey(12),
+      enabled: raw.enabled === true,
+      name: line(raw.name, 80), kind: pickE('kind'), tone: pickE('tone'), icon: line(raw.icon, 8),
+      title: line(raw.title, 120), text: String(raw.text ?? '').replace(/\r\n?/g, '\n').slice(0, 1500), image: httpsUrl(raw.image),
+      buttons: (Array.isArray(raw.buttons) ? raw.buttons : []).slice(0, 2).map((b) => ({ label: line(b?.label, 40), url: popupUrl(b?.url), style: b?.style === 'ghost' ? 'ghost' : 'primary', newTab: b?.newTab === true })),
+      from: wall(raw.from), until: wall(raw.until),
+      pages: [...new Set((Array.isArray(raw.pages) ? raw.pages : []).filter((x) => POPUP_PAGES.includes(x)))],
+      audience: pickE('audience'), visitors: pickE('visitors'), freq: pickE('freq'), trigger: pickE('trigger'),
+      delay: clampInt(raw.delay, 600), scroll: clampInt(raw.scroll ?? 50, 100) || 50, autoClose: clampInt(raw.autoClose, 120), rev: clampInt(raw.rev, 1e6),
+      createdAt: String(raw.createdAt || new Date().toISOString()).slice(0, 25),
+    };
+  }
+  function normPopups(raw) {
+    const seen = new Set();
+    return (Array.isArray(raw) ? raw : []).slice(0, 30).map(normPopup).filter((p) => p && !seen.has(p.id) && seen.add(p.id));
   }
   const CONTACT_DEFAULTS = {
     phone: '077-226-2271', phone2: '073-707-9536', email: 'rbr17011701@gmail.com',
@@ -1257,7 +1292,7 @@
     },
     normalize,
     normEpisode,
-    normSettings, normPoll, normGuests,
+    normSettings, normPoll, normPopup, normGuests,
   };
 
   window.RoshStore = {

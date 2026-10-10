@@ -205,5 +205,7 @@
       seek();
     } else window.scrollTo(0, 0);
     if (main) { main.setAttribute('tabindex', '-1'); main.focus({ preventScroll: true }); }
+    // הדף הוחלף: מי שתלוי בדף הנוכחי (ההודעות הקופצות) בודק מחדש
+    document.dispatchEvent(new CustomEvent('rosh:page'));
   }
 })();
